@@ -1,0 +1,222 @@
+
+text "
+dss snapshot aging is implemented in terms of intervals. There are
+two command line options related to intervals: the duration of a
+'unit' interval and the number of those intervals.
+
+dss removes any snapshots older than the given number of intervals
+times the duration of an unit interval and tries to keep the following
+amount of snapshots per interval:
+
+	interval number		number of snapshots
+	===============================================
+	0	 		2 ^ (num_intervals - 1)
+	1			2 ^ (num_intervals - 2)
+	2			2 ^ (num_intervals - 3)
+	...
+	num_intervals - 2			2
+	num_intervals - 1			1
+	num_intervals				0
+
+In other words, the oldest snapshot will at most be unit_interval *
+num_intervala old (= 5 days * 4 = 20 days if default values are used).
+Moreover, there are at most 2^num_intervals - 1 snapshots in total
+(i.e. 31 by default).  Observe that you have to create at least
+num_intervals snapshots each interval for this to work out.  "
+
+
+
+package "dss"
+version "0.0.1"
+
+option "config_file" c
+#~~~~~~~~~~~~~~~~~~~~~
+"(default='~/.dssrc')"
+
+	string typestr="filename"
+	optional
+
+section "Logging"
+#~~~~~~~~~~~~~~~~
+
+option "loglevel" l
+#~~~~~~~~~~~~~~~~~~
+
+"set loglevel (0-6)"
+
+	int typestr="level"
+	default="4"
+	optional
+
+option "logfile" L
+#~~~~~~~~~~~~~~~~~~
+
+"logfile for the dss daemon process"
+
+	string typestr="filename"
+	optional
+
+section "rsync-related options"
+#==============================
+
+option "remote_user" U
+#~~~~~~~~~~~~~~~~~~~~~
+
+"remote user name (default: current user)"
+
+	string typestr="username"
+	optional
+
+option "remote_host" H
+#~~~~~~~~~~~~~~~~~~~~~
+
+"remote host"
+
+	string typestr="hostname"
+	default="localhost"
+	optional
+
+option "source_dir" S
+#~~~~~~~~~~~~~~~~~~~~
+
+"directory to backup on the remote host"
+
+	string typestr="dirname"
+	optional
+
+option "dest_dir" D
+#~~~~~~~~~~~~~~~~~~
+
+"snapshots dir on the local host"
+
+	string typestr="dirname"
+	optional
+
+option "rsync_option" O
+#~~~~~~~~~~~~~~~~~~~~~~
+
+"further rsync options that are passed
+verbatim to the rsync command."
+
+	string typestr="option"
+	optional
+	multiple
+
+
+option "exclude_patterns" e
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+"rsync exclude patterns"
+
+	string typestr="path"
+	optional
+
+
+section "Intervals"
+#~~~~~~~~~~~~~~~~~~
+
+
+option "unit_interval" u
+#~~~~~~~~~~~~~~~~~~~~~~~
+"the duration of a unit interval"
+
+	int typestr="days"
+	default="4"
+	optional
+
+option "num_intervals" n
+#~~~~~~~~~~~~~~~~~~~~~~~
+"the number of unit intervals"
+
+	int typestr="num"
+	default="5"
+	optional
+
+section "Hooks"
+#==============
+
+option "pre_create_hook" r
+#~~~~~~~~~~~~~~~~~~~~~~~~~~
+"Executed before snapshot creation"
+
+	string typestr="command"
+	default="/bin/true"
+	optional
+
+text "
+	Execute this command before trying to create a new snapshot
+	If this command returns with a non-zero exit status, do not
+	perform the backup. One possible application of this is to
+	return non-zero during office hours in order to not slow down
+	the file systems by taking snapshots.
+"
+
+
+option "post_create_hook" o
+#~~~~~~~~~~~~~~~~~~~~~~~~~~
+"Executed after snapshot creation"
+
+	string typestr="command"
+	default="/bin/true"
+	optional
+
+text "
+	Execute this after a snapshot has successfully been created
+	The return value on the command is ignored. For instance one
+	could count the number of files per user and/or the disk
+	usage patterns in order to store them in a database for
+	further treatment.
+"
+option "creation_sleep" s
+#~~~~~~~~~~~~~~~~~~~~~~~~
+"sleep interval"
+
+	int typestr="minutes"
+	default="60"
+	optional
+
+text "
+	The sleep interval for snapshot creation in minutes.
+	The daemon will, in an endlees loop, create a snapshot and
+	then sleep that many minutes.
+"
+
+
+option "min_free" m
+#~~~~~~~~~~~~~~~~~~
+
+"minimal amount of free space"
+
+	int typestr="gigabytes"
+	default="50"
+	optional
+
+text "
+	If less that this many gigabytes of space is available,
+	dss will start to remove snapshots (starting from the oldest
+	snapshot) until the free disk space exeecds this value.
+"
+
+
+text "
+subcommands:
+
+ls:
+
+	Print list of existing snapshots.
+
+	Usage: ls
+
+free:
+
+	Remove old snapshots in order to free space.
+
+	Usage: free [size]
+
+	Without size parameter, print the amount of free space on the file system
+	in human-readable format.
+
+	Otherwise, remove snapshots (starting from the oldest one) until the number of
+	free space exceeds the given number of gigabytes.
+	Use with caution!
+"
