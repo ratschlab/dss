@@ -54,7 +54,6 @@ static inline void log_err_msg(int loglevel, int num)
 #define DSS_ERRORS \
 	DSS_ERROR(SUCCESS, "success") \
 	DSS_ERROR(SYNTAX, "syntax error") \
-	DSS_ERROR(INVALID_COMMAND, "invalid command") \
 	DSS_ERROR(ATOI_OVERFLOW, "value too large") \
 	DSS_ERROR(STRTOLL, "unknown strtoll error") \
 	DSS_ERROR(ATOI_NO_DIGITS, "no digits found in string") \

@@ -43,7 +43,8 @@ COMMANDS
 int call_command_handler(int argc, char * const * const argv)
 {
 	COMMANDS
-	return -E_INVALID_COMMAND;
+	DSS_EMERG_LOG("BUG: did not find command handler\n");
+	exit(EXIT_FAILURE);
 }
 #undef COMMAND
 #undef COMMANDS
