@@ -23,11 +23,13 @@
 #include "fd.h"
 #include "exec.h"
 #include "daemon.h"
+#include "signal.h"
 
 
 struct gengetopt_args_info conf;
 char *dss_error_txt = NULL;
 static FILE *logfile;
+int signal_pipe;
 
 DEFINE_DSS_ERRLIST;
 
@@ -316,9 +318,21 @@ int wait_for_process(pid_t pid, int *status)
 
 	DSS_DEBUG_LOG("Waiting for process %d to terminate\n", (int)pid);
 	for (;;) {
-		ret = waitpid(pid, status, 0);
-		if (ret >= 0 || errno != EINTR)
+		pause();
+		ret = next_signal();
+		if  (ret < 0)
 			break;
+		if (!ret)
+			continue;
+		if (ret == SIGCHLD) {
+			ret = waitpid(pid, status, 0);
+			if (ret >= 0)
+				break;
+			if (errno != EINTR) /* error */
+				break;
+		}
+		DSS_WARNING_LOG("sending SIGTERM to pid %d\n", (int)pid);
+		kill(pid, SIGTERM);
 	}
 	if (ret < 0) {
 		ret = -ERRNO_TO_DSS_ERROR(errno);
@@ -446,10 +460,15 @@ int wait_for_rm_process(pid_t pid)
 
 int com_run(void)
 {
+	int ret;
+
 	if (conf.dry_run_given) {
 		make_err_msg("dry_run not supported by this command");
 		return -E_SYNTAX;
 	}
+	ret = install_sighandler(SIGHUP);
+	if (ret < 0)
+		return ret;
 	return 42;
 }
 
@@ -708,6 +727,28 @@ int check_config(void)
 	return 1;
 }
 
+static void setup_signal_handling(void)
+{
+	int ret;
+
+	DSS_NOTICE_LOG("setting up signal handlers\n");
+	signal_pipe = signal_init(); /* always successful */
+	ret = install_sighandler(SIGINT);
+	if (ret < 0)
+		goto err;
+	ret = install_sighandler(SIGTERM);
+	if (ret < 0)
+		goto err;
+	ret = install_sighandler(SIGCHLD);
+	if (ret < 0)
+		goto err;
+	return;
+err:
+	DSS_EMERG_LOG("could not install signal handlers\n");
+	exit(EXIT_FAILURE);
+}
+
+
 int main(int argc, char **argv)
 {
 	int ret;
@@ -728,11 +769,12 @@ int main(int argc, char **argv)
 		logfile = open_log(conf.logfile_arg);
 		log_welcome(conf.loglevel_arg);
 	}
-	if (conf.daemon_given)
-		daemon_init();
 	ret = dss_chdir(conf.dest_dir_arg);
 	if (ret < 0)
 		goto out;
+	if (conf.daemon_given)
+		daemon_init();
+	setup_signal_handling();
 	ret = call_command_handler();
 out:
 	if (ret < 0)

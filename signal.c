@@ -69,7 +69,7 @@ err_out:
 static void generic_signal_handler(int s)
 {
 	write(signal_pipe[1], &s, sizeof(int));
-	//fprintf(stderr, "got sig %i, write returned %d\n", s, ret);
+	//fprintf(stderr, "got sig %i\n", s);
 }
 
 /**
@@ -107,31 +107,36 @@ int reap_child(pid_t *pid)
 }
 
 /**
- * wrapper around signal(2)
- * \param sig the number of the signal to catch
+ * Wrapper around signal(2)
+ *
+ * \param sig The number of the signal to catch.
  *
  * This installs the generic signal handler for the given signal.
+ *
  * \return This function returns 1 on success and \p -E_SIGNAL_SIG_ERR on errors.
  * \sa signal(2)
  */
 int install_sighandler(int sig)
 {
 	DSS_DEBUG_LOG("catching signal %d\n", sig);
-	return signal(sig, &generic_signal_handler) == SIG_ERR?  -E_SIGNAL_SIG_ERR : 1;
+	if (signal(sig, &generic_signal_handler) != SIG_ERR)
+		return 1;
+	make_err_msg("signal %d", sig);
+	return -E_SIGNAL_SIG_ERR;
 }
 
 /**
- * return number of next pending signal
+ * Return number of next pending signal.
  *
  * This should be called if the fd for the signal pipe is ready for reading.
  *
- * \return On success, the number of the received signal is returned. \p
- * -E_SIGNAL_READ is returned if a read error occurred while reading the signal
- * pipe.  If the read was interrupted by another signal the function returns 0.
+ * \return On success, the number of the received signal is returned.
+ * If the read was interrupted by another signal the function returns 0.
+ * Otherwise a negative error code is returned.
  */
 int next_signal(void)
 {
-	int s;
+	int s, err;
 	ssize_t r;
 
 	r = read(signal_pipe[0], &s, sizeof(s));
@@ -139,7 +144,12 @@ int next_signal(void)
 		DSS_DEBUG_LOG("next signal: %d\n", s);
 		return s;
 	}
-	return r < 0 && (errno != EAGAIN)? 0 : -ERRNO_TO_DSS_ERROR(errno);
+	err = errno;
+	assert(r < 0);
+	if (err == EAGAIN)
+		return 0;
+	make_err_msg("failed to read from signal pipe");
+	return -ERRNO_TO_DSS_ERROR(err);
 }
 
 /**

@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <signal.h>
 
 
 #include "gcc-compat.h"
@@ -73,6 +74,9 @@ int dss_exec(pid_t *pid, const char *file, char *const *const args, int *fds)
 		}
 		if (null >= 0)
 			close(null);
+		signal(SIGINT, SIG_DFL);
+		signal(SIGTERM, SIG_DFL);
+		signal(SIGCHLD, SIG_DFL);
 		execvp(file, args);
 		_exit(EXIT_FAILURE);
 	}
