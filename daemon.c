@@ -108,8 +108,3 @@ void log_welcome(int loglevel)
 	DSS_INFO_LOG("***** welcome to dss ******\n");
 	DSS_DEBUG_LOG("using loglevel %d\n", loglevel);
 }
-
-int com_daemon(int argc, char * const * argv)
-{
-	return 1;
-}

@@ -31,6 +31,15 @@ option "logfile" -
 	string typestr="filename"
 	optional
 
+option "daemon" d
+#~~~~~~~~~~~~~~~~
+"run as background daemon"
+flag off
+dependon="logfile"
+details="
+	Note that dsss refuses to start in daemon mode if no logfile
+	was specified.
+"
 
 defgroup "command"
 #=================

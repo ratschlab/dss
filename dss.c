@@ -22,10 +22,12 @@
 #include "error.h"
 #include "fd.h"
 #include "exec.h"
+#include "daemon.h"
 
 
 struct gengetopt_args_info conf;
 char *dss_error_txt = NULL;
+static FILE *logfile;
 
 DEFINE_DSS_ERRLIST;
 
@@ -67,6 +69,37 @@ struct snapshot {
 	enum snapshot_status_flags flags;
 	unsigned interval;
 };
+
+__printf_2_3 void dss_log(int ll, const char* fmt,...)
+{
+	va_list argp;
+	FILE *outfd;
+	struct tm *tm;
+	time_t t1;
+	char str[255] = "";
+
+	if (ll < conf.loglevel_arg)
+		return;
+	outfd = logfile? logfile : stderr;
+	time(&t1);
+	tm = localtime(&t1);
+	strftime(str, sizeof(str), "%b %d %H:%M:%S", tm);
+	fprintf(outfd, "%s ", str);
+	if (conf.loglevel_arg <= INFO)
+		fprintf(outfd, "%i: ", ll);
+	va_start(argp, fmt);
+	vfprintf(outfd, fmt, argp);
+	va_end(argp);
+}
+
+__printf_1_2 void msg(const char* fmt,...)
+{
+	FILE *outfd = conf.daemon_given? logfile : stdout;
+	va_list argp;
+	va_start(argp, fmt);
+	vfprintf(outfd, fmt, argp);
+	va_end(argp);
+}
 
 int is_snapshot(const char *dirname, int64_t now, struct snapshot *s)
 {
@@ -357,7 +390,7 @@ int remove_redundant_snapshot(struct snapshot_list *sl,
 		}
 		assert(victim);
 		if (dry_run) {
-			printf("%s would be removed (interval = %i)\n",
+			msg("%s would be removed (interval = %i)\n",
 				victim->name, victim->interval);
 			continue;
 		}
@@ -378,7 +411,7 @@ int remove_old_snapshot(struct snapshot_list *sl, int dry_run, pid_t *pid)
 		if (s->interval <= conf.num_intervals_arg)
 			continue;
 		if (dry_run) {
-			printf("%s would be removed (interval = %i)\n",
+			msg("%s would be removed (interval = %i)\n",
 				s->name, s->interval);
 			continue;
 		}
@@ -589,7 +622,7 @@ int com_ls(void)
 	struct snapshot *s;
 	get_snapshot_list(&sl);
 	FOR_EACH_SNAPSHOT(s, i, &sl)
-		printf("%u\t%s\n", s->interval, s->name);
+		msg("%u\t%s\n", s->interval, s->name);
 	free_snapshot_list(&sl);
 	return 1;
 }
@@ -600,16 +633,6 @@ __noreturn void clean_exit(int status)
 	//kill(0, SIGTERM);
 	free(dss_error_txt);
 	exit(status);
-}
-
-__printf_2_3 void dss_log(int ll, const char* fmt,...)
-{
-	va_list argp;
-	if (ll < conf.loglevel_arg)
-		return;
-	va_start(argp, fmt);
-	vfprintf(stderr, fmt, argp);
-	va_end(argp);
 }
 
 int read_config_file(void)
@@ -682,6 +705,12 @@ int main(int argc, char **argv)
 	ret = check_config();
 	if (ret < 0)
 		goto out;
+	if (conf.logfile_given) {
+		logfile = open_log(conf.logfile_arg);
+		log_welcome(conf.loglevel_arg);
+	}
+	if (conf.daemon_given)
+		daemon_init();
 	ret = dss_chdir(conf.dest_dir_arg);
 	if (ret < 0)
 		goto out;
