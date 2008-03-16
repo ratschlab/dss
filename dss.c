@@ -36,11 +36,11 @@ DEFINE_DSS_ERRLIST;
 	COMMAND(create) \
 	COMMAND(prune) \
 	COMMAND(run)
-#define COMMAND(x) int com_ ##x(int, char * const * const);
+#define COMMAND(x) int com_ ##x(void);
 COMMANDS
 #undef COMMAND
-#define COMMAND(x) if (conf.x ##_given) return com_ ##x(argc, argv);
-int call_command_handler(int argc, char * const * const argv)
+#define COMMAND(x) if (conf.x ##_given) return com_ ##x();
+int call_command_handler(void)
 {
 	COMMANDS
 	DSS_EMERG_LOG("BUG: did not find command handler\n");
@@ -409,28 +409,17 @@ int wait_for_rm_process(pid_t pid)
 	return 1;
 }
 
-int com_run(int argc, char * const * argv)
+int com_run(void)
 {
 	return 42;
 }
 
-int com_prune(int argc, char * const * argv)
+int com_prune(void)
 {
 	int ret, dry_run = 0;
 	struct snapshot_list sl;
 	pid_t pid;
 
-	if (argc > 2) {
-		make_err_msg("too many arguments");
-		return -E_SYNTAX;
-	}
-	if (argc == 2) {
-		if (strcmp(argv[1], "-d")) {
-			make_err_msg("%s", argv[1]);
-			return -E_SYNTAX;
-		}
-		dry_run = 1;
-	}
 	for (;;) {
 		get_snapshot_list(&sl);
 		ret = remove_old_snapshot(&sl, dry_run, &pid);
@@ -561,18 +550,13 @@ int rename_incomplete_snapshot(int64_t start)
 	return ret;
 }
 
-int com_create(int argc, __a_unused char * const * argv)
+int com_create(void)
 {
 	int ret, status, es;
 	char **rsync_argv;
 	int64_t snapshot_num;
 	pid_t pid;
 
-	if (argc != 1) {
-		ret = -E_SYNTAX;
-		make_err_msg("create: no args expected, %d given", argc - 1);
-		return ret;
-	}
 	create_rsync_argv(&rsync_argv, &snapshot_num);
 	DSS_NOTICE_LOG("creating snapshot %lli\n", (long long)snapshot_num);
 	ret = create_snapshot(rsync_argv, &pid);
@@ -598,16 +582,11 @@ out:
 	return ret;
 }
 
-int com_ls(int argc, __a_unused char * const * argv)
+int com_ls(void)
 {
-	int i, ret;
+	int i;
 	struct snapshot_list sl;
 	struct snapshot *s;
-	if (argc != 1) {
-		ret = -E_SYNTAX;
-		make_err_msg("ls: no args expected, %d given", argc - 1);
-		return ret;
-	}
 	get_snapshot_list(&sl);
 	FOR_EACH_SNAPSHOT(s, i, &sl)
 		printf("%u\t%s\n", s->interval, s->name);
@@ -706,7 +685,7 @@ int main(int argc, char **argv)
 	ret = dss_chdir(conf.dest_dir_arg);
 	if (ret < 0)
 		goto out;
-	ret = call_command_handler(conf.inputs_num, conf.inputs);
+	ret = call_command_handler();
 out:
 	if (ret < 0)
 		log_err_msg(EMERG, -ret);
