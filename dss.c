@@ -29,29 +29,24 @@ char *dss_error_txt = NULL;
 
 DEFINE_DSS_ERRLIST;
 
-/** Defines one dss command. */
-struct server_command {
-	/** The name of the command. */
-	const char *name;
-	/** Pointer to the function that handles the command. */
-	int (*handler)(int, char * const * const);
-};
 
 /* a litte cpp magic helps to DRY */
-#define SERVER_COMMANDS \
-	SERVER_COMMAND(ls) \
-	SERVER_COMMAND(create) \
-	SERVER_COMMAND(prune) \
-	SERVER_COMMAND(daemon)
-#define SERVER_COMMAND(x) int com_ ##x(int, char * const * const);
-SERVER_COMMANDS
-#undef SERVER_COMMAND
-#define SERVER_COMMAND(x) {.name = #x, .handler = com_ ## x},
-static struct server_command command_list[] = {
-	SERVER_COMMANDS
-	{.name = NULL, .handler = NULL}
-};
-#undef SERVER_COMMAND
+#define COMMANDS \
+	COMMAND(ls) \
+	COMMAND(create) \
+	COMMAND(prune) \
+	COMMAND(run)
+#define COMMAND(x) int com_ ##x(int, char * const * const);
+COMMANDS
+#undef COMMAND
+#define COMMAND(x) if (conf.x ##_given) return com_ ##x(argc, argv);
+int call_command_handler(int argc, char * const * const argv)
+{
+	COMMANDS
+	return -E_INVALID_COMMAND;
+}
+#undef COMMAND
+#undef COMMANDS
 
 /*
  * complete, not being deleted: 1204565370-1204565371.Sun_Mar_02_2008_14_33-Sun_Mar_02_2008_14_43
@@ -413,6 +408,11 @@ int wait_for_rm_process(pid_t pid)
 	return 1;
 }
 
+int com_run(int argc, char * const * argv)
+{
+	return 42;
+}
+
 int com_prune(int argc, char * const * argv)
 {
 	int ret, dry_run = 0;
@@ -688,7 +688,7 @@ int check_config(void)
 
 int main(int argc, char **argv)
 {
-	int i, ret;
+	int ret;
 
 	cmdline_parser(argc, argv, &conf); /* aborts on errors */
 	if (!conf.inputs_num) {
@@ -705,14 +705,7 @@ int main(int argc, char **argv)
 	ret = dss_chdir(conf.dest_dir_arg);
 	if (ret < 0)
 		goto out;
-	for (i = 0; command_list[i].name; i++) {
-		if (strcmp(command_list[i].name, conf.inputs[0]))
-			continue;
-		ret = command_list[i].handler(conf.inputs_num, conf.inputs);
-		goto out;
-	}
-	ret = -E_INVALID_COMMAND;
-	make_err_msg("%s", conf.inputs[0]);
+	ret = call_command_handler(conf.inputs_num, conf.inputs);
 out:
 	if (ret < 0)
 		log_err_msg(EMERG, -ret);

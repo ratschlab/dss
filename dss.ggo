@@ -1,3 +1,7 @@
+#
+package "dss"
+version "0.0.1"
+purpose "the dyadic snapshot scheduler"
 
 text "
 dss snapshot aging is implemented in terms of intervals. There are
@@ -26,9 +30,6 @@ num_intervals snapshots each interval for this to work out.  "
 
 
 
-package "dss"
-version "0.0.1"
-
 option "config_file" c
 #~~~~~~~~~~~~~~~~~~~~~
 "(default='~/.dssrc')"
@@ -48,8 +49,53 @@ option "loglevel" l
 	default="4"
 	optional
 
-option "logfile" L
+defgroup "command"
+groupdesc="
+	dss supports a couple of commands each of which corresponds to a different
+	command line option. Exactly one of these options must be given.
+"
+required
+
+groupoption "create" C
+#~~~~~~~~~~~~~~~~~~~~~
+"create a new snapshot"
+group="command"
+details="
+	Execute the rsync command to create a new snapshot.Mote that this
+	command does not care about free disk space.
+"
+groupoption "prune" P
+#~~~~~~~~~~~~~~~~~~~~
+"remove a redundant snapshot"
+group="command"
+details="
+	A snapshot is considered redundant if it ether belongs to
+	an interval greater than the maximum nuber of intervals,
+	or if it belongs to an interval that already contains more
+	than the desired number of snapshots.
+"
+
+groupoption "ls" L
+#~~~~~~~~~~~~~~~~~
+"print a list of all snapshots"
+group="command"
+details="
+	The list will contain all snapshots not matter of their state,
+	i.e. incomplete snapshots and snapshots being deleted will
+	also be listed.
+"
+
+groupoption "run" R
 #~~~~~~~~~~~~~~~~~~
+"start creating and pruning snapshots"
+group="command"
+details="
+	This is the main mode of operation. Snapshots will be created
+	as needed and pruned automatically.
+"
+
+option "logfile" -
+#~~~~~~~~~~~~~~~~~
 
 "logfile for the dss daemon process"
 
@@ -195,28 +241,4 @@ details="
 	If less that this many gigabytes of space is available,
 	dss will start to remove snapshots (starting from the oldest
 	snapshot) until the free disk space exeecds this value.
-"
-
-
-text "
-subcommands:
-
-ls:
-
-	Print list of existing snapshots.
-
-	Usage: ls
-
-free:
-
-	Remove old snapshots in order to free space.
-
-	Usage: free [size]
-
-	Without size parameter, print the amount of free space on the file system
-	in human-readable format.
-
-	Otherwise, remove snapshots (starting from the oldest one) until the number of
-	free space exceeds the given number of gigabytes.
-	Use with caution!
 "
