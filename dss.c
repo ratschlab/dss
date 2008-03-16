@@ -24,6 +24,7 @@
 #include "exec.h"
 #include "daemon.h"
 #include "signal.h"
+#include "df.h"
 
 
 struct gengetopt_args_info conf;
@@ -472,12 +473,24 @@ int com_run(void)
 	return 42;
 }
 
+void log_disk_space(struct disk_space *ds)
+{
+	DSS_INFO_LOG("free: %uM/%uM (%u%%), %u%% inodes unused\n",
+		ds->free_mb, ds->total_mb, ds->percent_free,
+		ds->percent_free_inodes);
+}
+
 int com_prune(void)
 {
 	int ret;
 	struct snapshot_list sl;
 	pid_t pid;
+	struct disk_space ds;
 
+	ret = get_disk_space(".", &ds);
+	if (ret < 0)
+		return ret;
+	log_disk_space(&ds);
 	for (;;) {
 		get_snapshot_list(&sl);
 		ret = remove_old_snapshot(&sl, &pid);
