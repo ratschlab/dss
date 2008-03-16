@@ -691,9 +691,9 @@ int main(int argc, char **argv)
 	int ret;
 
 	cmdline_parser(argc, argv, &conf); /* aborts on errors */
-	if (!conf.inputs_num) {
+	if (conf.inputs_num) {
 		ret = -E_SYNTAX;
-		make_err_msg("no command given");
+		make_err_msg("additional non-options given");
 		goto out;
 	}
 	ret = read_config_file();
