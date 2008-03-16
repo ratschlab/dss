@@ -92,7 +92,10 @@ __printf_2_3 void dss_log(int ll, const char* fmt,...)
 	va_end(argp);
 }
 
-__printf_1_2 void msg(const char* fmt,...)
+/**
+ * Print a message either to stdout or to the log file.
+ */
+__printf_1_2 void dss_msg(const char* fmt,...)
 {
 	FILE *outfd = conf.daemon_given? logfile : stdout;
 	va_list argp;
@@ -341,8 +344,7 @@ out:
 	return ret;
 }
 
-int remove_redundant_snapshot(struct snapshot_list *sl,
-		int dry_run, pid_t *pid)
+int remove_redundant_snapshot(struct snapshot_list *sl, pid_t *pid)
 {
 	int ret, i, interval;
 	struct snapshot *s;
@@ -389,8 +391,8 @@ int remove_redundant_snapshot(struct snapshot_list *sl,
 			prev = s;
 		}
 		assert(victim);
-		if (dry_run) {
-			msg("%s would be removed (interval = %i)\n",
+		if (conf.dry_run_given) {
+			dss_msg("%s would be removed (interval = %i)\n",
 				victim->name, victim->interval);
 			continue;
 		}
@@ -400,7 +402,7 @@ int remove_redundant_snapshot(struct snapshot_list *sl,
 	return 0;
 }
 
-int remove_old_snapshot(struct snapshot_list *sl, int dry_run, pid_t *pid)
+int remove_old_snapshot(struct snapshot_list *sl, pid_t *pid)
 {
 	int i, ret;
 	struct snapshot *s;
@@ -410,8 +412,8 @@ int remove_old_snapshot(struct snapshot_list *sl, int dry_run, pid_t *pid)
 	FOR_EACH_SNAPSHOT(s, i, sl) {
 		if (s->interval <= conf.num_intervals_arg)
 			continue;
-		if (dry_run) {
-			msg("%s would be removed (interval = %i)\n",
+		if (conf.dry_run_given) {
+			dss_msg("%s would be removed (interval = %i)\n",
 				s->name, s->interval);
 			continue;
 		}
@@ -444,18 +446,22 @@ int wait_for_rm_process(pid_t pid)
 
 int com_run(void)
 {
+	if (conf.dry_run_given) {
+		make_err_msg("dry_run not supported by this command");
+		return -E_SYNTAX;
+	}
 	return 42;
 }
 
 int com_prune(void)
 {
-	int ret, dry_run = 0;
+	int ret;
 	struct snapshot_list sl;
 	pid_t pid;
 
 	for (;;) {
 		get_snapshot_list(&sl);
-		ret = remove_old_snapshot(&sl, dry_run, &pid);
+		ret = remove_old_snapshot(&sl, &pid);
 		free_snapshot_list(&sl);
 		if (ret < 0)
 			return ret;
@@ -467,7 +473,7 @@ int com_prune(void)
 	}
 	for (;;) {
 		get_snapshot_list(&sl);
-		ret = remove_redundant_snapshot(&sl, dry_run, &pid);
+		ret = remove_redundant_snapshot(&sl, &pid);
 		free_snapshot_list(&sl);
 		if (ret < 0)
 			return ret;
@@ -591,6 +597,19 @@ int com_create(void)
 	pid_t pid;
 
 	create_rsync_argv(&rsync_argv, &snapshot_num);
+	if (conf.dry_run_given) {
+		int i;
+		char *msg = NULL;
+		for (i = 0; rsync_argv[i]; i++) {
+			char *tmp = msg;
+			msg = make_message("%s%s%s", tmp? tmp : "",
+				tmp? " " : "", rsync_argv[i]);
+			free(tmp);
+		}
+		dss_msg("%s\n", msg);
+		free(msg);
+		return 1;
+	}
 	DSS_NOTICE_LOG("creating snapshot %lli\n", (long long)snapshot_num);
 	ret = create_snapshot(rsync_argv, &pid);
 	if (ret < 0)
@@ -622,7 +641,7 @@ int com_ls(void)
 	struct snapshot *s;
 	get_snapshot_list(&sl);
 	FOR_EACH_SNAPSHOT(s, i, &sl)
-		msg("%u\t%s\n", s->interval, s->name);
+		dss_msg("%u\t%s\n", s->interval, s->name);
 	free_snapshot_list(&sl);
 	return 1;
 }

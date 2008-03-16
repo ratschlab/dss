@@ -41,6 +41,16 @@ details="
 	was specified.
 "
 
+option "dry_run" D
+#~~~~~~~~~~~~~~~~~
+"only print what would be done"
+flag off
+details="
+	This flag does not makes sense for all commands. The run
+	command refuses to start if this option was given. The ls
+	command silently ignores this flag.
+"
+
 defgroup "command"
 #=================
 groupdesc="
@@ -107,7 +117,7 @@ option "remote_host" H
 	default="localhost"
 	optional
 
-option "source_dir" S
+option "source_dir" -
 #~~~~~~~~~~~~~~~~~~~~
 
 "directory to backup on the remote host"
@@ -115,7 +125,7 @@ option "source_dir" S
 	string typestr="dirname"
 	optional
 
-option "dest_dir" D
+option "dest_dir" -
 #~~~~~~~~~~~~~~~~~~
 
 "snapshots dir on the local host"
