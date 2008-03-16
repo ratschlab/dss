@@ -3,32 +3,6 @@ package "dss"
 version "0.0.1"
 purpose "the dyadic snapshot scheduler"
 
-text "
-dss snapshot aging is implemented in terms of intervals. There are
-two command line options related to intervals: the duration of a
-'unit' interval and the number of those intervals.
-
-dss removes any snapshots older than the given number of intervals
-times the duration of an unit interval and tries to keep the following
-amount of snapshots per interval:
-
-	interval number		number of snapshots
-	===============================================
-	0	 		2 ^ (num_intervals - 1)
-	1			2 ^ (num_intervals - 2)
-	2			2 ^ (num_intervals - 3)
-	...
-	num_intervals - 2			2
-	num_intervals - 1			1
-	num_intervals				0
-
-In other words, the oldest snapshot will at most be unit_interval *
-num_intervala old (= 5 days * 4 = 20 days if default values are used).
-Moreover, there are at most 2^num_intervals - 1 snapshots in total
-(i.e. 31 by default).  Observe that you have to create at least
-num_intervals snapshots each interval for this to work out.  "
-
-
 
 option "config_file" c
 #~~~~~~~~~~~~~~~~~~~~~
@@ -49,7 +23,17 @@ option "loglevel" l
 	default="4"
 	optional
 
+option "logfile" -
+#~~~~~~~~~~~~~~~~~
+
+"logfile for the dss daemon process"
+
+	string typestr="filename"
+	optional
+
+
 defgroup "command"
+#=================
 groupdesc="
 	dss supports a couple of commands each of which corresponds to a different
 	command line option. Exactly one of these options must be given.
@@ -93,14 +77,6 @@ details="
 	This is the main mode of operation. Snapshots will be created
 	as needed and pruned automatically.
 "
-
-option "logfile" -
-#~~~~~~~~~~~~~~~~~
-
-"logfile for the dss daemon process"
-
-	string typestr="filename"
-	optional
 
 section "rsync-related options"
 #==============================
@@ -161,6 +137,30 @@ option "exclude_patterns" e
 section "Intervals"
 #~~~~~~~~~~~~~~~~~~
 
+text "
+dss snapshot aging is implemented in terms of intervals. There are
+two command line options related to intervals: the duration of a
+'unit' interval and the number of those unit intervals.
+
+dss removes any snapshots older than the given number of intervals
+times the duration of an unit interval and tries to keep the following
+number of snapshots per interval:
+
+	interval number		number of snapshots
+	===============================================
+	0	 		2 ^ (num_intervals - 1)
+	1			2 ^ (num_intervals - 2)
+	2			2 ^ (num_intervals - 3)
+	...
+	num_intervals - 2			2
+	num_intervals - 1			1
+	num_intervals				0
+
+In other words, the oldest snapshot will at most be unit_interval *
+num_intervala old (= 5 days * 4 = 20 days if default values are used).
+Moreover, there are at most 2^num_intervals - 1 snapshots in total
+(i.e. 31 by default).  Observe that you have to create at least
+num_intervals snapshots each interval for this to work out.  "
 
 option "unit_interval" u
 #~~~~~~~~~~~~~~~~~~~~~~~
