@@ -7,3 +7,13 @@ __printf_1_2 void make_err_msg(const char* fmt,...);
 __must_check __malloc char *get_homedir(void);
 int dss_atoi64(const char *str, int64_t *value);
 __must_check __malloc char *dss_logname(void);
+
+/** \cond LLONG_MAX and LLONG_LIN might not be defined. */
+#ifndef LLONG_MAX
+#define LLONG_MAX (1 << (sizeof(long) - 1))
+#endif
+#ifndef LLONG_MIN
+#define LLONG_MIN (-LLONG_MAX - 1LL)
+#endif
+/** \endcond */
+

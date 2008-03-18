@@ -8,6 +8,6 @@
 
 int signal_init(void);
 int install_sighandler(int);
-int reap_child(pid_t *pid);
 int next_signal(void);
 void signal_shutdown(void);
+int reap_child(pid_t *pid, int *status);

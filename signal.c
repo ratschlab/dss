@@ -86,21 +86,20 @@ static void generic_signal_handler(int s)
  *
  * \sa waitpid(2)
  */
-int reap_child(pid_t *pid)
+int reap_child(pid_t *pid, int *status)
 {
-	int status;
-	*pid = waitpid(-1, &status, WNOHANG);
+	*pid = waitpid(-1, status, WNOHANG);
 
 	if (!*pid)
 		return 0;
 	if (*pid < 0)
 		return -ERRNO_TO_DSS_ERROR(errno);
-	if (WIFEXITED(status))
+	if (WIFEXITED(*status))
 		DSS_DEBUG_LOG("child %i exited. Exit status: %i\n", (int)*pid,
-			WEXITSTATUS(status));
-	else if (WIFSIGNALED(status))
+			WEXITSTATUS(*status));
+	else if (WIFSIGNALED(*status))
 		DSS_DEBUG_LOG("child %i was killed by signal %i\n", (int)*pid,
-			WTERMSIG(status));
+			WTERMSIG(*status));
 	else
 		DSS_WARNING_LOG("child %i terminated abormally\n", (int)*pid);
 	return 1;

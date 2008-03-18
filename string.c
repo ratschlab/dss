@@ -13,6 +13,7 @@
 #include "gcc-compat.h"
 #include "log.h"
 #include "error.h"
+#include "string.h"
 
 __noreturn void clean_exit(int status);
 
@@ -182,15 +183,6 @@ __must_check __malloc char *get_homedir(void)
 	struct passwd *pw = getpwuid(getuid());
 	return dss_strdup(pw? pw->pw_dir : "/tmp");
 }
-
-/** \cond LLONG_MAX and LLONG_LIN might not be defined. */
-#ifndef LLONG_MAX
-#define LLONG_MAX (1 << (sizeof(long) - 1))
-#endif
-#ifndef LLONG_MIN
-#define LLONG_MIN (-LLONG_MAX - 1LL)
-#endif
-/** \endcond */
 
 /**
  * Convert a string to a 64-bit signed integer value.

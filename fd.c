@@ -102,3 +102,33 @@ __must_check int mark_fd_nonblocking(int fd)
 	return 1;
 }
 
+/**
+ * dss' wrapper for select(2).
+ *
+ * It calls select(2) (with no exceptfds) and starts over if select() was
+ * interrupted by a signal.
+ *
+ * \param n The highest-numbered descriptor in any of the two sets, plus 1.
+ * \param readfds fds that should be checked for readability.
+ * \param writefds fds that should be checked for writablility.
+ * \param timeout_tv upper bound on the amount of time elapsed before select()
+ * returns.
+ *
+ * \return The return value of the underlying select() call on success, the
+ * negative system error code on errors.
+ *
+ * All arguments are passed verbatim to select(2).
+ * \sa select(2) select_tut(2).
+ */
+int dss_select(int n, fd_set *readfds, fd_set *writefds,
+		struct timeval *timeout_tv)
+{
+	int ret, err;
+	do {
+		ret = select(n, readfds, writefds, NULL, timeout_tv);
+		err = errno;
+	} while (ret < 0 && err == EINTR);
+	if (ret < 0)
+		return -ERRNO_TO_DSS_ERROR(errno);
+	return ret;
+}

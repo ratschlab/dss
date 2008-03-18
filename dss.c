@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <sys/time.h>
 #include <time.h>
 #include <sys/wait.h>
 #include <fnmatch.h>
@@ -25,12 +26,25 @@
 #include "daemon.h"
 #include "signal.h"
 #include "df.h"
+#include "time.h"
 
 
 struct gengetopt_args_info conf;
 char *dss_error_txt = NULL;
 static FILE *logfile;
 int signal_pipe;
+
+/** Process id of current rsync process. */
+static pid_t rsync_pid;
+/** Whether the rsync process is currently stopped */
+static int rsync_stopped;
+/** Process id of current rm process. */
+static pid_t rm_pid;
+/** When the next snapshot is due. */
+struct timeval next_snapshot_time;
+/* Creation time of the snapshot currently being created. */
+int64_t current_snapshot_creation_time;
+
 
 DEFINE_DSS_ERRLIST;
 
@@ -73,6 +87,19 @@ struct snapshot {
 	unsigned interval;
 };
 
+/*
+ * An edge snapshot is either the oldest one or the newest one.
+ *
+ * We need to find either of them occasionally: The create code
+ * needs to know the newest snapshot because that is the one
+ * used as the link destination dir. The pruning code needs to
+ * find the oldest one in case disk space becomes low.
+ */
+struct edge_snapshot_data {
+	int64_t now;
+	struct snapshot snap;
+};
+
 __printf_2_3 void dss_log(int ll, const char* fmt,...)
 {
 	va_list argp;
@@ -105,6 +132,21 @@ __printf_1_2 void dss_msg(const char* fmt,...)
 	va_start(argp, fmt);
 	vfprintf(outfd, fmt, argp);
 	va_end(argp);
+}
+
+/**
+ * Return the desired number of snapshots of an interval.
+ */
+unsigned num_snapshots(int interval)
+{
+	unsigned n;
+
+	assert(interval >= 0);
+
+	if (interval >= conf.num_intervals_arg)
+		return 0;
+	n = conf.num_intervals_arg - interval - 1;
+	return 1 << n;
 }
 
 int is_snapshot(const char *dirname, int64_t now, struct snapshot *s)
@@ -285,6 +327,22 @@ void get_snapshot_list(struct snapshot_list *sl)
 		compare_snapshots);
 }
 
+void stop_rsync_process(void)
+{
+	if (!rsync_pid || rsync_stopped)
+		return;
+	kill(SIGSTOP, rsync_pid);
+	rsync_stopped = 1;
+}
+
+void restart_rsync_process(void)
+{
+	if (!rsync_pid || !rsync_stopped)
+		return;
+	kill (SIGCONT, rsync_pid);
+	rsync_stopped = 0;
+}
+
 void free_snapshot_list(struct snapshot_list *sl)
 {
 	int i;
@@ -343,9 +401,10 @@ int wait_for_process(pid_t pid, int *status)
 	return ret;
 }
 
-int remove_snapshot(struct snapshot *s, pid_t *pid)
+int remove_snapshot(struct snapshot *s)
 {
 	int fds[3] = {0, 0, 0};
+	assert(!rm_pid);
 	char *new_name = being_deleted_name(s);
 	int ret = dss_rename(s->name, new_name);
 	char *argv[] = {"rm", "-rf", new_name, NULL};
@@ -353,13 +412,16 @@ int remove_snapshot(struct snapshot *s, pid_t *pid)
 	if (ret < 0)
 		goto out;
 	DSS_NOTICE_LOG("removing %s (interval = %i)\n", s->name, s->interval);
-	ret = dss_exec(pid, argv[0], argv, fds);
+	stop_rsync_process();
+	ret = dss_exec(&rm_pid, argv[0], argv, fds);
 out:
 	free(new_name);
 	return ret;
 }
-
-int remove_redundant_snapshot(struct snapshot_list *sl, pid_t *pid)
+/*
+ * return: 0: no redundant snapshots, 1: rm process started, negative: error
+ */
+int remove_redundant_snapshot(struct snapshot_list *sl)
 {
 	int ret, i, interval;
 	struct snapshot *s;
@@ -367,7 +429,7 @@ int remove_redundant_snapshot(struct snapshot_list *sl, pid_t *pid)
 
 	DSS_INFO_LOG("looking for intervals containing too many snapshots\n");
 	for (interval = conf.num_intervals_arg - 1; interval >= 0; interval--) {
-		unsigned keep = 1<<(conf.num_intervals_arg - interval - 1);
+		unsigned keep = num_snapshots(interval);
 		unsigned num = sl->interval_count[interval];
 		struct snapshot *victim = NULL, *prev = NULL;
 		int64_t score = LONG_MAX;
@@ -411,13 +473,13 @@ int remove_redundant_snapshot(struct snapshot_list *sl, pid_t *pid)
 				victim->name, victim->interval);
 			continue;
 		}
-		ret = remove_snapshot(victim, pid);
+		ret = remove_snapshot(victim);
 		return ret < 0? ret : 1;
 	}
 	return 0;
 }
 
-int remove_old_snapshot(struct snapshot_list *sl, pid_t *pid)
+int remove_outdated_snapshot(struct snapshot_list *sl)
 {
 	int i, ret;
 	struct snapshot *s;
@@ -432,7 +494,7 @@ int remove_old_snapshot(struct snapshot_list *sl, pid_t *pid)
 				s->name, s->interval);
 			continue;
 		}
-		ret = remove_snapshot(s, pid);
+		ret = remove_snapshot(s);
 		if (ret < 0)
 			return ret;
 		return 1;
@@ -440,23 +502,276 @@ int remove_old_snapshot(struct snapshot_list *sl, pid_t *pid)
 	return 0;
 }
 
-int wait_for_rm_process(pid_t pid)
+int handle_rm_exit(int status)
 {
-	int status, es, ret = wait_for_process(pid, &status);
-	if (ret < 0)
-		return ret;
+	int es, ret;
+
 	if (!WIFEXITED(status)) {
-		ret = E_INVOLUNTARY_EXIT;
-		make_err_msg("rm process %d died involuntary", (int)pid);
-		return ret;
+		make_err_msg("rm process %d died involuntary", (int)rm_pid);
+		ret = -E_INVOLUNTARY_EXIT;
+		goto out;
 	}
 	es = WEXITSTATUS(status);
 	if (es) {
+		make_err_msg("rm process %d returned %d", (int)rm_pid, es);
 		ret = -E_BAD_EXIT_CODE;
-		make_err_msg("rm process %d returned %d", (int)pid, es);
-		return ret;
+		goto out;
 	}
+	ret = 1;
+	rm_pid = 0;
+out:
+	return ret;
+}
+
+
+int wait_for_rm_process(void)
+{
+	int status, ret = wait_for_process(rm_pid, &status);
+
+	if (ret < 0)
+		return ret;
+	return handle_rm_exit(status);
+}
+
+void kill_process(pid_t pid)
+{
+	if (!pid)
+		return
+	DSS_WARNING_LOG("sending SIGTERM to pid %d\n", (int)pid);
+	kill(pid, SIGTERM);
+}
+
+void handle_sighup()
+{
+	DSS_INFO_LOG("FIXME: no sighup handling yet\n");
+}
+
+int rename_incomplete_snapshot(int64_t start)
+{
+	char *old_name, *new_name;
+	int ret;
+
+	ret = complete_name(start, get_current_time(), &new_name);
+	if (ret < 0)
+		return ret;
+	old_name = incomplete_name(start);
+	ret = dss_rename(old_name, new_name);
+	if (ret >= 0)
+		DSS_NOTICE_LOG("%s -> %s\n", old_name, new_name);
+	free(old_name);
+	free(new_name);
+	return ret;
+}
+
+
+int handle_rsync_exit(int status)
+{
+	int es, ret;
+
+	if (!WIFEXITED(status)) {
+		make_err_msg("rsync process %d died involuntary", (int)rsync_pid);
+		ret = -E_INVOLUNTARY_EXIT;
+		goto out;
+	}
+	es = WEXITSTATUS(status);
+	if (es != 0 && es != 23 && es != 24) {
+		make_err_msg("rsync process %d returned %d", (int)rsync_pid, es);
+		ret = -E_BAD_EXIT_CODE;
+		goto out;
+	}
+	ret = rename_incomplete_snapshot(current_snapshot_creation_time);
+out:
+	rsync_pid = 0;
+	current_snapshot_creation_time = 0;
+	rsync_stopped = 0;
+	return ret;
+}
+
+
+void compute_next_snapshot_time(struct snapshot_list *sl)
+{
+	struct timeval now, unit_interval = {.tv_sec = 24 * 3600 * conf.unit_interval_arg},
+		tmp, diff;
+	int64_t x = 0;
+	unsigned wanted = num_snapshots(0), num_complete_snapshots = 0;
+	int i, ret;
+	struct snapshot *s;
+
+	gettimeofday(&now, NULL);
+	FOR_EACH_SNAPSHOT(s, i, sl) {
+		if (!(s->flags & SS_COMPLETE))
+			continue;
+		num_complete_snapshots++;
+		x += s->completion_time - s->creation_time;
+	}
+	assert(x >= 0);
+	if (num_complete_snapshots)
+		x /= num_complete_snapshots; /* avg time to create one snapshot */
+	x *= wanted; /* time to create all snapshots in interval 0 */
+	tmp.tv_sec = x;
+	tmp.tv_usec = 0;
+	ret = tv_diff(&unit_interval, &tmp, &diff); /* time between creation */
+	if (ret < 0) {
+		next_snapshot_time = now;
+		return;
+	}
+	tv_divide(wanted, &diff, &tmp);
+	tv_add(&now, &tmp, &next_snapshot_time);
+}
+
+void handle_signal(struct snapshot_list *sl)
+{
+	int sig, ret = next_signal();
+
+	if (ret <= 0)
+		goto out;
+	sig = ret;
+	switch (sig) {
+		int status;
+		pid_t pid;
+	case SIGINT:
+	case SIGTERM:
+		restart_rsync_process();
+		kill_process(rsync_pid);
+		kill_process(rm_pid);
+		exit(EXIT_FAILURE);
+	case SIGHUP:
+		handle_sighup();
+		break;
+	case SIGCHLD:
+		ret = reap_child(&pid, &status);
+		if (ret <= 0)
+			break;
+		assert(pid == rsync_pid || pid == rm_pid);
+		if (pid == rsync_pid)
+			ret = handle_rsync_exit(status);
+		else
+			ret = handle_rm_exit(status);
+		free_snapshot_list(sl);
+		get_snapshot_list(sl);
+		compute_next_snapshot_time(sl);
+	}
+out:
+	if (ret < 0)
+		log_err_msg(ERROR, -ret);
+}
+
+int get_oldest(const char *dirname, void *private)
+{
+	struct edge_snapshot_data *esd = private;
+	struct snapshot s;
+	int ret = is_snapshot(dirname, esd->now, &s);
+
+	if (ret <= 0)
+		return 1;
+	if (s.creation_time > esd->snap.creation_time)
+		return 1;
+	free(esd->snap.name);
+	esd->snap = s;
 	return 1;
+}
+
+int remove_oldest_snapshot()
+{
+	int ret;
+	struct edge_snapshot_data esd = {
+		.now = get_current_time(),
+		.snap = {.creation_time = LLONG_MAX}
+	};
+	for_each_subdir(get_oldest, &esd);
+	if (!esd.snap.name) /* no snapshot found */
+		return 0;
+	DSS_INFO_LOG("oldest snapshot: %s\n", esd.snap.name);
+	ret = 0;
+	if (esd.snap.creation_time == current_snapshot_creation_time)
+		goto out; /* do not remove the snapshot currently being created */
+	ret = remove_snapshot(&esd.snap);
+out:
+	free(esd.snap.name);
+	return ret;
+}
+
+/* TODO: Also consider number of inodes. */
+int disk_space_low(void)
+{
+	struct disk_space ds;
+	int ret = get_disk_space(".", &ds);
+
+	if (ret < 0)
+		return ret;
+	if (conf.min_free_mb_arg)
+		if (ds.free_mb < conf.min_free_mb_arg)
+			return 1;
+	if (conf.min_free_percent_arg)
+		if (ds.percent_free < conf.min_free_percent_arg)
+			return 1;
+	return 0;
+}
+
+int try_to_free_disk_space(int low_disk_space, struct snapshot_list *sl)
+{
+	int ret;
+
+	ret = remove_outdated_snapshot(sl);
+	if (ret) /* error, or we are removing something */
+		return ret;
+	/* no outdated snapshot */
+	ret = remove_redundant_snapshot(sl);
+	if (ret)
+		return ret;
+	if (!low_disk_space)
+		return 0;
+	DSS_WARNING_LOG("disk space low and nothing obvious to remove\n");
+	ret = remove_oldest_snapshot();
+	if (ret)
+		return ret;
+	make_err_msg("uhuhu: not enough disk space for a single snapshot");
+	return  -ENOSPC;
+}
+
+int select_loop(void)
+{
+	int ret;
+	struct timeval tv = {.tv_sec = 60, .tv_usec = 0};
+	struct snapshot_list sl = {.num_snapshots = 0};
+
+	get_snapshot_list(&sl);
+	compute_next_snapshot_time(&sl);
+	for (;;) {
+		struct timeval now;
+		fd_set rfds;
+		int low_disk_space;
+
+		FD_ZERO(&rfds);
+		ret = dss_select(signal_pipe + 1, &rfds, NULL, &tv);
+		if (ret < 0)
+			return ret;
+		if (FD_ISSET(signal_pipe, &rfds))
+			handle_signal(&sl);
+		if (rm_pid)
+			continue;
+		ret = disk_space_low();
+		if (ret < 0)
+			break;
+		low_disk_space = ret;
+		if (low_disk_space)
+			stop_rsync_process();
+		ret = try_to_free_disk_space(low_disk_space, &sl);
+		if (ret < 0)
+			break;
+		if (rm_pid)
+			continue;
+		if (rsync_pid) {
+			restart_rsync_process();
+			continue;
+		}
+		/* neither rsync nor rm are running. Start rsync? */
+		gettimeofday(&now, NULL);
+		if (tv_diff(&now, &next_snapshot_time, NULL) < 0)
+			continue;
+	}
+	free_snapshot_list(&sl);
+	return ret;
 }
 
 int com_run(void)
@@ -470,7 +785,7 @@ int com_run(void)
 	ret = install_sighandler(SIGHUP);
 	if (ret < 0)
 		return ret;
-	return 42;
+	return select_loop();
 }
 
 void log_disk_space(struct disk_space *ds)
@@ -484,7 +799,6 @@ int com_prune(void)
 {
 	int ret;
 	struct snapshot_list sl;
-	pid_t pid;
 	struct disk_space ds;
 
 	ret = get_disk_space(".", &ds);
@@ -493,25 +807,25 @@ int com_prune(void)
 	log_disk_space(&ds);
 	for (;;) {
 		get_snapshot_list(&sl);
-		ret = remove_old_snapshot(&sl, &pid);
+		ret = remove_outdated_snapshot(&sl);
 		free_snapshot_list(&sl);
 		if (ret < 0)
 			return ret;
 		if (!ret)
 			break;
-		ret = wait_for_rm_process(pid);
+		ret = wait_for_rm_process();
 		if (ret < 0)
 			goto out;
 	}
 	for (;;) {
 		get_snapshot_list(&sl);
-		ret = remove_redundant_snapshot(&sl, &pid);
+		ret = remove_redundant_snapshot(&sl);
 		free_snapshot_list(&sl);
 		if (ret < 0)
 			return ret;
 		if (!ret)
 			break;
-		ret = wait_for_rm_process(pid);
+		ret = wait_for_rm_process();
 		if (ret < 0)
 			goto out;
 	}
@@ -520,36 +834,31 @@ out:
 	return ret;
 }
 
-struct newest_snapshot_data {
-	char * newest_name;
-	int64_t newest_creation_time;
-	int64_t now;
-};
-
 int get_newest_complete(const char *dirname, void *private)
 {
-	struct newest_snapshot_data *nsd = private;
+	struct edge_snapshot_data *esd = private;
 	struct snapshot s;
-	int ret = is_snapshot(dirname, nsd->now, &s);
+	int ret = is_snapshot(dirname, esd->now, &s);
 
 	if (ret <= 0)
 		return 1;
-	if (s.creation_time < nsd->newest_creation_time)
+	if (s.flags != SS_COMPLETE) /* incomplete or being deleted */
 		return 1;
-	nsd->newest_creation_time = s.creation_time;
-	free(nsd->newest_name);
-	nsd->newest_name = s.name;
+	if (s.creation_time < esd->snap.creation_time)
+		return 1;
+	free(esd->snap.name);
+	esd->snap = s;
 	return 1;
 }
 
 __malloc char *name_of_newest_complete_snapshot(void)
 {
-	struct newest_snapshot_data nsd = {
+	struct edge_snapshot_data esd = {
 		.now = get_current_time(),
-		.newest_creation_time = -1
+		.snap = {.creation_time = -1}
 	};
-	for_each_subdir(get_newest_complete, &nsd);
-	return nsd.newest_name;
+	for_each_subdir(get_newest_complete, &esd);
+	return esd.snap.name;
 }
 
 void create_rsync_argv(char ***argv, int64_t *num)
@@ -597,38 +906,19 @@ void free_rsync_argv(char **argv)
 	free(argv);
 }
 
-int create_snapshot(char **argv, pid_t *pid)
+int create_snapshot(char **argv)
 {
 	int fds[3] = {0, 0, 0};
 
-	return dss_exec(pid, argv[0], argv, fds);
-}
-
-int rename_incomplete_snapshot(int64_t start)
-{
-	char *old_name, *new_name;
-	int ret;
-
-	ret = complete_name(start, get_current_time(), &new_name);
-	if (ret < 0)
-		return ret;
-	old_name = incomplete_name(start);
-	ret = dss_rename(old_name, new_name);
-	if (ret >= 0)
-		DSS_NOTICE_LOG("%s -> %s\n", old_name, new_name);
-	free(old_name);
-	free(new_name);
-	return ret;
+	return dss_exec(&rsync_pid, argv[0], argv, fds);
 }
 
 int com_create(void)
 {
-	int ret, status, es;
+	int ret, status;
 	char **rsync_argv;
-	int64_t snapshot_num;
-	pid_t pid;
 
-	create_rsync_argv(&rsync_argv, &snapshot_num);
+	create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
 	if (conf.dry_run_given) {
 		int i;
 		char *msg = NULL;
@@ -642,25 +932,15 @@ int com_create(void)
 		free(msg);
 		return 1;
 	}
-	DSS_NOTICE_LOG("creating snapshot %lli\n", (long long)snapshot_num);
-	ret = create_snapshot(rsync_argv, &pid);
+	DSS_NOTICE_LOG("creating snapshot %lli\n",
+		(long long)current_snapshot_creation_time);
+	ret = create_snapshot(rsync_argv);
 	if (ret < 0)
 		goto out;
-	ret = wait_for_process(pid, &status);
+	ret = wait_for_process(rsync_pid, &status);
 	if (ret < 0)
 		goto out;
-	if (!WIFEXITED(status)) {
-		ret = E_INVOLUNTARY_EXIT;
-		make_err_msg("rsync process %d died involuntary", (int)pid);
-		goto out;
-	}
-	es = WEXITSTATUS(status);
-	if (es != 0 && es != 23 && es != 24) {
-		ret = -E_BAD_EXIT_CODE;
-		make_err_msg("rsync process %d returned %d", (int)pid, es);
-		goto out;
-	}
-	ret = rename_incomplete_snapshot(snapshot_num);
+	ret = handle_rsync_exit(status);
 out:
 	free_rsync_argv(rsync_argv);
 	return ret;

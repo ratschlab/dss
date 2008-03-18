@@ -1,4 +1,4 @@
-dss_objects := dss.o cmdline.o string.o fd.o exec.o signal.o daemon.o df.o
+dss_objects := cmdline.o dss.o string.o fd.o exec.o signal.o daemon.o df.o time.o
 all: dss
 man: dss.1
 
@@ -22,7 +22,7 @@ include Makefile.deps
 dss: $(dss_objects)
 	$(CC) $(CPPFLAGS) $(DEBUG_CPPFLAGS) -o $@ $(dss_objects)
 
-%.o: %.c
+%.o: %.c cmdline.h
 	$(CC) -c $(CPPFLAGS) $(DEBUG_CPPFLAGS) $<
 
 %.ppm: %.sk

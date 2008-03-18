@@ -245,19 +245,33 @@ details="
 	The daemon will, in an endlees loop, create a snapshot and
 	then sleep that many minutes.
 "
+option "min_free_mb" m
+#~~~~~~~~~~~~~~~~~~~~~
 
-
-option "min_free" m
-#~~~~~~~~~~~~~~~~~~
-
-"minimal amount of free space"
+"minimal amount of free disk space"
 
 	int typestr="gigabytes"
-	default="50"
+	default="100"
 	optional
 
 details="
-	If less that this many gigabytes of space is available,
-	dss will start to remove snapshots (starting from the oldest
-	snapshot) until the free disk space exeecds this value.
+	If less that this many megabytes of space is available, \"dss
+	--run\" dss will start to remove snapshots (starting from the
+	oldest snapshot) until the free disk space exeecds this value.
+	See also the --min_free_percent option.
+
+	A value of zero deactivates this check.
+
+"
+
+option "min_free_percent" -
+#~~~~~~~~~~~~~~~~~~~~~~~~~~
+"minimal percent of free disk space"
+int typestr="percent"
+default="2"
+optional
+details="
+	See --min_free.  Note that it is not recommended to set both
+	--min_fre_mb and --min_free_percent to zero as this will
+	cause your file system to fill up quickly.
 "

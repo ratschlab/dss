@@ -21,3 +21,6 @@ _static_inline_ int dss_rename(const char *old_path, const char *new_path)
 	make_err_msg("rename %s -> %s failed", old_path, new_path);
 	return ret;
 }
+
+int dss_select(int n, fd_set *readfds, fd_set *writefds,
+		struct timeval *timeout_tv);
