@@ -2,9 +2,9 @@ dss creates hardlink-based snapshots of a given directory on a remote
 or local host using rsync's link-dest feature.
 
 dss is admin friendly: It is easy to configure and needs little
-attention once the dss daemon is running because dss keeps track of
-the available disk space and removes snapshots if disk space becomes
-sparse or snapshots become older than the specified time.
+attention once dss is configured to run in daemon mode because dss
+keeps track of the available disk space and removes snapshots if disk
+space becomes sparse or snapshots become older than the specified time.
 
 It's also user-friendly because users can browse the snapshot
 directories and see the contents of the file system at the time the
