@@ -32,7 +32,7 @@
 struct gengetopt_args_info conf;
 char *dss_error_txt = NULL;
 static FILE *logfile;
-int signal_pipe;
+static int signal_pipe;
 
 /** Process id of current rsync process. */
 static pid_t rsync_pid;
@@ -75,7 +75,9 @@ int call_command_handler(void)
  * incomplete, being deleted: 1204565370-incomplete.being_deleted
  */
 enum snapshot_status_flags {
+	/** The rsync process terminated successfully. */
 	SS_COMPLETE = 1,
+	/** The rm process is running to remove this snapshot. */
 	SS_BEING_DELETED = 2,
 };
 
@@ -149,6 +151,7 @@ unsigned num_snapshots(int interval)
 	return 1 << n;
 }
 
+/* return: Whether dirname is a snapshot directory (0: no, 1: yes) */
 int is_snapshot(const char *dirname, int64_t now, struct snapshot *s)
 {
 	int i, ret;
@@ -327,6 +330,19 @@ void get_snapshot_list(struct snapshot_list *sl)
 		compare_snapshots);
 }
 
+void free_snapshot_list(struct snapshot_list *sl)
+{
+	int i;
+	struct snapshot *s;
+
+	FOR_EACH_SNAPSHOT(s, i, sl) {
+		free(s->name);
+		free(s);
+	}
+	free(sl->interval_count);
+	free(sl->snapshots);
+}
+
 void stop_rsync_process(void)
 {
 	if (!rsync_pid || rsync_stopped)
@@ -341,19 +357,6 @@ void restart_rsync_process(void)
 		return;
 	kill (SIGCONT, rsync_pid);
 	rsync_stopped = 0;
-}
-
-void free_snapshot_list(struct snapshot_list *sl)
-{
-	int i;
-	struct snapshot *s;
-
-	FOR_EACH_SNAPSHOT(s, i, sl) {
-		free(s->name);
-		free(s);
-	}
-	free(sl->interval_count);
-	free(sl->snapshots);
 }
 
 /**
@@ -379,7 +382,7 @@ int wait_for_process(pid_t pid, int *status)
 	for (;;) {
 		pause();
 		ret = next_signal();
-		if  (ret < 0)
+		if (ret < 0)
 			break;
 		if (!ret)
 			continue;
@@ -387,16 +390,18 @@ int wait_for_process(pid_t pid, int *status)
 			ret = waitpid(pid, status, 0);
 			if (ret >= 0)
 				break;
-			if (errno != EINTR) /* error */
+			if (errno != EINTR) { /* error */
+				ret = -ERRNO_TO_DSS_ERROR(errno);
 				break;
+			}
 		}
+		/* SIGINT or SIGTERM */
 		DSS_WARNING_LOG("sending SIGTERM to pid %d\n", (int)pid);
 		kill(pid, SIGTERM);
 	}
-	if (ret < 0) {
-		ret = -ERRNO_TO_DSS_ERROR(errno);
+	if (ret < 0)
 		make_err_msg("failed to wait for process %d", (int)pid);
-	} else
+	else
 		log_termination_msg(pid, *status);
 	return ret;
 }
@@ -418,6 +423,7 @@ out:
 	free(new_name);
 	return ret;
 }
+
 /*
  * return: 0: no redundant snapshots, 1: rm process started, negative: error
  */
@@ -523,7 +529,6 @@ out:
 	return ret;
 }
 
-
 int wait_for_rm_process(void)
 {
 	int status, ret = wait_for_process(rm_pid, &status);
@@ -563,7 +568,6 @@ int rename_incomplete_snapshot(int64_t start)
 	return ret;
 }
 
-
 int handle_rsync_exit(int status)
 {
 	int es, ret;
@@ -586,7 +590,6 @@ out:
 	rsync_stopped = 0;
 	return ret;
 }
-
 
 int get_newest_complete(const char *dirname, void *private)
 {
@@ -970,10 +973,8 @@ int com_ls(void)
 	return 1;
 }
 
-/* TODO: Unlink pid file */
 __noreturn void clean_exit(int status)
 {
-	//kill(0, SIGTERM);
 	free(dss_error_txt);
 	exit(status);
 }
@@ -1052,7 +1053,6 @@ err:
 	DSS_EMERG_LOG("could not install signal handlers\n");
 	exit(EXIT_FAILURE);
 }
-
 
 int main(int argc, char **argv)
 {
