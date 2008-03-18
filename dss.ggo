@@ -1,35 +1,27 @@
 #
 package "dss"
 version "0.0.2"
-purpose "the dyadic snapshot scheduler"
+purpose "the dyadic snapshot scheduler
 
+dss creates hardlink-based snapshots of a given directory on a remote
+or local host using rsync's link-dest feature.
+"
 
-option "config_file" c
+#########################
+section "General options"
+#########################
+
+option "config-file" c
 #~~~~~~~~~~~~~~~~~~~~~
 "(default='~/.dssrc')"
-
-	string typestr="filename"
-	optional
-
-section "Logging"
-#~~~~~~~~~~~~~~~~
-
-option "loglevel" l
-#~~~~~~~~~~~~~~~~~~
-
-"set loglevel (0-6)"
-
-	int typestr="level"
-	default="4"
-	optional
-
-option "logfile" -
-#~~~~~~~~~~~~~~~~~
-
-"logfile for the dss daemon process"
-
-	string typestr="filename"
-	optional
+string typestr="filename"
+optional
+details="
+	Options may be given at the command line or in the
+	configuration file. As usual, if an option is given both at
+	the command line and in the configuration file, the command
+	line option takes precedence.
+"
 
 option "daemon" d
 #~~~~~~~~~~~~~~~~
@@ -37,11 +29,11 @@ option "daemon" d
 flag off
 dependon="logfile"
 details="
-	Note that dsss refuses to start in daemon mode if no logfile
+	Note that dss refuses to start in daemon mode if no logfile
 	was specified.
 "
 
-option "dry_run" D
+option "dry-run" D
 #~~~~~~~~~~~~~~~~~
 "only print what would be done"
 flag off
@@ -49,6 +41,30 @@ details="
 	This flag does not makes sense for all commands. The run
 	command refuses to start if this option was given. The ls
 	command silently ignores this flag.
+"
+
+#################
+section "Logging"
+#################
+
+option "loglevel" l
+#~~~~~~~~~~~~~~~~~~
+"set loglevel (0-6)"
+int typestr="level"
+default="3"
+optional
+details="
+	Lower values mean less verbose logging.
+"
+
+option "logfile" -
+#~~~~~~~~~~~~~~~~~
+"logfile for the dss daemon process"
+string typestr="filename"
+optional
+details="
+	This option is mostly useful for the run command if --daemon
+	is also given.
 "
 
 defgroup "command"
@@ -73,7 +89,7 @@ groupoption "prune" P
 group="command"
 details="
 	A snapshot is considered redundant if it ether belongs to
-	an interval greater than the maximum nuber of intervals,
+	an interval greater than the maximum number of intervals,
 	or if it belongs to an interval that already contains more
 	than the desired number of snapshots.
 "
@@ -97,119 +113,128 @@ details="
 	as needed and pruned automatically.
 "
 
-section "rsync-related options"
-#==============================
+###############################
+section "Rsync-related options"
+###############################
 
-option "remote_user" U
+option "remote-user" U
 #~~~~~~~~~~~~~~~~~~~~~
-
 "remote user name (default: current user)"
+string typestr="username"
+optional
+details="
+	If a user is specified that differs from the user running
+	dss, then rsync will use ssh for taking snapshots.  This will
+	only work if you set up a key-pair to allow rsync to proceed
+	without asking for passwords.
+"
 
-	string typestr="username"
-	optional
-
-option "remote_host" H
+option "remote-host" H
 #~~~~~~~~~~~~~~~~~~~~~
-
 "remote host"
+string typestr="hostname"
+default="localhost"
+optional
+details="
+	If this option is given and its value differs from the local
+	host, then rsync uses ssh, so make sure the user running dss
+	does not need a password to connect to the remote host.
+"
 
-	string typestr="hostname"
-	default="localhost"
-	optional
-
-option "source_dir" -
+option "source-dir" -
 #~~~~~~~~~~~~~~~~~~~~
+"the data directory"
+string typestr="dirname"
+optional
+details="
+	The directory on the remote host from which snapshots are
+	taken.	Of course, the user specified as --remote-user must
+	have read access to this directory.
+"
 
-"directory to backup on the remote host"
-
-	string typestr="dirname"
-	optional
-
-option "dest_dir" -
+option "dest-dir" -
 #~~~~~~~~~~~~~~~~~~
+"snapshot dir"
+string typestr="dirname"
+optional
+details="
+	The destination directory on the local host where snapshots
+	will be written. This must be writable by the user who runs
+	dss.
+"
 
-"snapshots dir on the local host"
-
-	string typestr="dirname"
-	optional
-
-option "rsync_option" O
+option "rsync-option" O
 #~~~~~~~~~~~~~~~~~~~~~~
+"further rsync options"
+string typestr="option"
+optional
+multiple
+details="
+	These option may be given multiple times. The arguments passed
+	to that option are passed verbatim to the rsync command.
+"
 
-"further rsync options that are passed
-verbatim to the rsync command."
-
-	string typestr="option"
-	optional
-	multiple
-
-
-option "exclude_patterns" e
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
+option "exclude-patterns" e
+#~~~~~~~~~~~~~~~~~~~~~~~~~~
 "rsync exclude patterns"
+string typestr="path"
+optional
 
-	string typestr="path"
-	optional
-
-
+###################
 section "Intervals"
-#~~~~~~~~~~~~~~~~~~
+###################
 
-text "
-dss snapshot aging is implemented in terms of intervals. There are
-two command line options related to intervals: the duration of a
-'unit' interval and the number of those unit intervals.
-
-dss removes any snapshots older than the given number of intervals
-times the duration of an unit interval and tries to keep the following
-number of snapshots per interval:
-
-	interval number		number of snapshots
-	===============================================
-	0	 		2 ^ (num_intervals - 1)
-	1			2 ^ (num_intervals - 2)
-	2			2 ^ (num_intervals - 3)
-	...
-	num_intervals - 2			2
-	num_intervals - 1			1
-	num_intervals				0
-
-In other words, the oldest snapshot will at most be unit_interval *
-num_intervala old (= 5 days * 4 = 20 days if default values are used).
-Moreover, there are at most 2^num_intervals - 1 snapshots in total
-(i.e. 31 by default).  Observe that you have to create at least
-num_intervals snapshots each interval for this to work out.  "
-
-option "unit_interval" u
+option "unit-interval" u
 #~~~~~~~~~~~~~~~~~~~~~~~
 "the duration of a unit interval"
+int typestr="days"
+default="4"
+optional
+details="
+	dss snapshot aging is implemented in terms of intervals. There are
+	two command line options related to intervals: the duration of a
+	\"unit\" interval and the number of those unit intervals.
 
-	int typestr="days"
-	default="4"
-	optional
+	dss removes any snapshots older than the given number of intervals
+	times the duration of an unit interval and tries to keep the following
+	number of snapshots per interval:
 
-option "num_intervals" n
+		interval number		number of snapshots
+		===============================================
+		0	 		2 ^ (num-intervals - 1)
+		1			2 ^ (num-intervals - 2)
+		2			2 ^ (num-intervals - 3)
+		...
+		num-intervals - 2			2
+		num-intervals - 1			1
+		num-intervals				0
+
+	In other words, the oldest snapshot will at most be unit_interval *
+	num_intervals old (= 5 days * 4 = 20 days if default values are used).
+	Moreover, there are at most 2^num_intervals - 1 snapshots in total
+	(i.e. 31 by default).  Observe that you have to create at least
+	2 ^ (num_intervals - 1) snapshots each interval for this to work out.
+"
+
+option "num-intervals" n
 #~~~~~~~~~~~~~~~~~~~~~~~
 "the number of unit intervals"
+int typestr="num"
+default="5"
+optional
 
-	int typestr="num"
-	default="5"
-	optional
-
+###############
 section "Hooks"
-#==============
+###############
 
-option "pre_create_hook" r
+option "pre-create-hook" r
 #~~~~~~~~~~~~~~~~~~~~~~~~~~
 "Executed before snapshot creation"
-
-	string typestr="command"
-	default="/bin/true"
-	optional
-
+string typestr="command"
+default="/bin/true"
+optional
 details="
-	Execute this command before trying to create a new snapshot
+	Execute this command before trying to create a new snapshot.
 	If this command returns with a non-zero exit status, do not
 	perform the backup. One possible application of this is to
 	return non-zero during office hours in order to not slow down
@@ -217,14 +242,12 @@ details="
 "
 
 
-option "post_create_hook" o
+option "post-create-hook" o
 #~~~~~~~~~~~~~~~~~~~~~~~~~~
 "Executed after snapshot creation"
-
-	string typestr="command"
-	default="/bin/true"
-	optional
-
+string typestr="command"
+default="/bin/true"
+optional
 details="
 	Execute this after a snapshot has successfully been created
 	The return value on the command is ignored. For instance one
@@ -232,39 +255,30 @@ details="
 	usage patterns in order to store them in a database for
 	further treatment.
 "
-option "creation_sleep" s
-#~~~~~~~~~~~~~~~~~~~~~~~~
-"sleep interval"
 
-	int typestr="minutes"
-	default="60"
-	optional
+###############################
+section "disk space monitoring"
+###############################
 
-details="
-	The sleep interval for snapshot creation in minutes.
-	The daemon will, in an endlees loop, create a snapshot and
-	then sleep that many minutes.
-"
-option "min_free_mb" m
+option "min-free-mb" m
 #~~~~~~~~~~~~~~~~~~~~~
-
 "minimal amount of free disk space"
-
-	int typestr="gigabytes"
-	default="100"
-	optional
-
+int typestr="megabytes"
+default="100"
+optional
 details="
-	If less that this many megabytes of space is available, \"dss
-	--run\" dss will start to remove snapshots (starting from the
-	oldest snapshot) until the free disk space exeecds this value.
-	See also the --min_free_percent option.
+	If less that this many megabytes of space is available on
+	the file system containing the destination directory, \"dss
+	--run\" will stop the currently running rsync process and will
+	start to remove snapshots, starting from the oldest snapshot,
+	until the free disk space exceeds this value.  See also the
+	--min_free_percent option.
 
 	A value of zero deactivates this check.
 
 "
 
-option "min_free_percent" -
+option "min-free-percent" p
 #~~~~~~~~~~~~~~~~~~~~~~~~~~
 "minimal percent of free disk space"
 int typestr="percent"
