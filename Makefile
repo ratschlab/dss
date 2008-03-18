@@ -31,7 +31,7 @@ dss: $(dss_objects)
 	convert $< $@
 
 cmdline.c cmdline.h: dss.ggo
-	gengetopt --unamed-opts=command --conf-parser < $<
+	gengetopt --conf-parser < $<
 
 dss.1: dss
 	help2man -N ./$< > $@
