@@ -17,7 +17,7 @@ CPPFLAGS += -Wbad-function-cast
 Makefile.deps: $(wildcard *.c *.h)
 	gcc -MM -MG *.c > $@
 
-include Makefile.deps
+-include Makefile.deps
 
 dss: $(dss_objects)
 	$(CC) $(CPPFLAGS) $(DEBUG_CPPFLAGS) -o $@ $(dss_objects)
