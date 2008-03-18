@@ -206,7 +206,7 @@ int is_snapshot(const char *dirname, int64_t now, struct snapshot *s)
 		return 0;
 	s->completion_time = num;
 	s->flags = SS_COMPLETE;
-	if (strcmp(dot + 1, "being_deleted"))
+	if (!strcmp(dot + 1, "being_deleted"))
 		s->flags |= SS_BEING_DELETED;
 success:
 	s->name = dss_strdup(dirname);
@@ -444,7 +444,7 @@ int remove_redundant_snapshot(struct snapshot_list *sl)
 		FOR_EACH_SNAPSHOT(s, i, sl) {
 			int64_t this_score;
 
-			DSS_DEBUG_LOG("checking %s\n", s->name);
+			//DSS_DEBUG_LOG("checking %s\n", s->name);
 			if (s->interval > interval) {
 				prev = s;
 				continue;
@@ -460,7 +460,7 @@ int remove_redundant_snapshot(struct snapshot_list *sl)
 			/* check if s is a better victim */
 			this_score = s->creation_time - prev->creation_time;
 			assert(this_score >= 0);
-			DSS_DEBUG_LOG("%s: score %lli\n", s->name, (long long)score);
+			//DSS_DEBUG_LOG("%s: score %lli\n", s->name, (long long)score);
 			if (this_score < score) {
 				score = this_score;
 				victim = s;
@@ -536,7 +536,7 @@ int wait_for_rm_process(void)
 void kill_process(pid_t pid)
 {
 	if (!pid)
-		return
+		return;
 	DSS_WARNING_LOG("sending SIGTERM to pid %d\n", (int)pid);
 	kill(pid, SIGTERM);
 }
@@ -587,6 +587,88 @@ out:
 	return ret;
 }
 
+
+int get_newest_complete(const char *dirname, void *private)
+{
+	struct edge_snapshot_data *esd = private;
+	struct snapshot s;
+	int ret = is_snapshot(dirname, esd->now, &s);
+
+	if (ret <= 0)
+		return 1;
+	if (s.flags != SS_COMPLETE) /* incomplete or being deleted */
+		return 1;
+	if (s.creation_time < esd->snap.creation_time)
+		return 1;
+	free(esd->snap.name);
+	esd->snap = s;
+	return 1;
+}
+
+__malloc char *name_of_newest_complete_snapshot(void)
+{
+	struct edge_snapshot_data esd = {
+		.now = get_current_time(),
+		.snap = {.creation_time = -1}
+	};
+	for_each_subdir(get_newest_complete, &esd);
+	return esd.snap.name;
+}
+
+void create_rsync_argv(char ***argv, int64_t *num)
+{
+	char *logname, *newest = name_of_newest_complete_snapshot();
+	int i = 0, j;
+
+	*argv = dss_malloc((15 + conf.rsync_option_given) * sizeof(char *));
+	(*argv)[i++] = dss_strdup("rsync");
+	(*argv)[i++] = dss_strdup("-aq");
+	(*argv)[i++] = dss_strdup("--delete");
+	for (j = 0; j < conf.rsync_option_given; j++)
+		(*argv)[i++] = dss_strdup(conf.rsync_option_arg[j]);
+	if (newest) {
+		DSS_INFO_LOG("using %s as reference snapshot\n", newest);
+		(*argv)[i++] = make_message("--link-dest=../%s", newest);
+		free(newest);
+	} else
+		DSS_INFO_LOG("no previous snapshot found\n");
+	if (conf.exclude_patterns_given) {
+		(*argv)[i++] = dss_strdup("--exclude-from");
+		(*argv)[i++] = dss_strdup(conf.exclude_patterns_arg);
+
+	}
+	logname = dss_logname();
+	if (conf.remote_user_given && !strcmp(conf.remote_user_arg, logname))
+		(*argv)[i++] = dss_strdup(conf.source_dir_arg);
+	else
+		(*argv)[i++] = make_message("%s@%s:%s/", conf.remote_user_given?
+			conf.remote_user_arg : logname,
+			conf.remote_host_arg, conf.source_dir_arg);
+	free(logname);
+	*num = get_current_time();
+	(*argv)[i++] = incomplete_name(*num);
+	(*argv)[i++] = NULL;
+	for (j = 0; j < i; j++)
+		DSS_DEBUG_LOG("argv[%d] = %s\n", j, (*argv)[j]);
+}
+
+void free_rsync_argv(char **argv)
+{
+	int i;
+	for (i = 0; argv[i]; i++)
+		free(argv[i]);
+	free(argv);
+}
+
+int create_snapshot(char **argv)
+{
+	int fds[3] = {0, 0, 0};
+	char *name = incomplete_name(current_snapshot_creation_time);
+
+	DSS_NOTICE_LOG("creating new snapshot %s\n", name);
+	free(name);
+	return dss_exec(&rsync_pid, argv[0], argv, fds);
+}
 
 void compute_next_snapshot_time(struct snapshot_list *sl)
 {
@@ -732,18 +814,24 @@ int try_to_free_disk_space(int low_disk_space, struct snapshot_list *sl)
 int select_loop(void)
 {
 	int ret;
-	struct timeval tv = {.tv_sec = 60, .tv_usec = 0};
+	struct timeval tv = {.tv_sec = 0, .tv_usec = 0};
 	struct snapshot_list sl = {.num_snapshots = 0};
 
 	get_snapshot_list(&sl);
 	compute_next_snapshot_time(&sl);
 	for (;;) {
-		struct timeval now;
+		struct timeval now, *tvp = &tv;
 		fd_set rfds;
 		int low_disk_space;
+		char **rsync_argv;
 
 		FD_ZERO(&rfds);
-		ret = dss_select(signal_pipe + 1, &rfds, NULL, &tv);
+		FD_SET(signal_pipe, &rfds);
+		if (rsync_pid)
+			tv.tv_sec = 60;
+		else if (rm_pid)
+			tvp = NULL;
+		ret = dss_select(signal_pipe + 1, &rfds, NULL, tvp);
 		if (ret < 0)
 			return ret;
 		if (FD_ISSET(signal_pipe, &rfds))
@@ -767,8 +855,13 @@ int select_loop(void)
 		}
 		/* neither rsync nor rm are running. Start rsync? */
 		gettimeofday(&now, NULL);
-		if (tv_diff(&now, &next_snapshot_time, NULL) < 0)
+		if (tv_diff(&next_snapshot_time, &now, &tv) > 0)
 			continue;
+		create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
+		ret = create_snapshot(rsync_argv);
+		free_rsync_argv(rsync_argv);
+		if (ret < 0)
+			break;
 	}
 	free_snapshot_list(&sl);
 	return ret;
@@ -834,85 +927,6 @@ out:
 	return ret;
 }
 
-int get_newest_complete(const char *dirname, void *private)
-{
-	struct edge_snapshot_data *esd = private;
-	struct snapshot s;
-	int ret = is_snapshot(dirname, esd->now, &s);
-
-	if (ret <= 0)
-		return 1;
-	if (s.flags != SS_COMPLETE) /* incomplete or being deleted */
-		return 1;
-	if (s.creation_time < esd->snap.creation_time)
-		return 1;
-	free(esd->snap.name);
-	esd->snap = s;
-	return 1;
-}
-
-__malloc char *name_of_newest_complete_snapshot(void)
-{
-	struct edge_snapshot_data esd = {
-		.now = get_current_time(),
-		.snap = {.creation_time = -1}
-	};
-	for_each_subdir(get_newest_complete, &esd);
-	return esd.snap.name;
-}
-
-void create_rsync_argv(char ***argv, int64_t *num)
-{
-	char *logname, *newest = name_of_newest_complete_snapshot();
-	int i = 0, j;
-
-	*argv = dss_malloc((15 + conf.rsync_option_given) * sizeof(char *));
-	(*argv)[i++] = dss_strdup("rsync");
-	(*argv)[i++] = dss_strdup("-aq");
-	(*argv)[i++] = dss_strdup("--delete");
-	for (j = 0; j < conf.rsync_option_given; j++)
-		(*argv)[i++] = dss_strdup(conf.rsync_option_arg[j]);
-	if (newest) {
-		DSS_INFO_LOG("using %s as reference snapshot\n", newest);
-		(*argv)[i++] = make_message("--link-dest=../%s", newest);
-		free(newest);
-	} else
-		DSS_INFO_LOG("no previous snapshot found");
-	if (conf.exclude_patterns_given) {
-		(*argv)[i++] = dss_strdup("--exclude-from");
-		(*argv)[i++] = dss_strdup(conf.exclude_patterns_arg);
-
-	}
-	logname = dss_logname();
-	if (conf.remote_user_given && !strcmp(conf.remote_user_arg, logname))
-		(*argv)[i++] = dss_strdup(conf.source_dir_arg);
-	else
-		(*argv)[i++] = make_message("%s@%s:%s/", conf.remote_user_given?
-			conf.remote_user_arg : logname,
-			conf.remote_host_arg, conf.source_dir_arg);
-	free(logname);
-	*num = get_current_time();
-	(*argv)[i++] = incomplete_name(*num);
-	(*argv)[i++] = NULL;
-	for (j = 0; j < i; j++)
-		DSS_DEBUG_LOG("argv[%d] = %s\n", j, (*argv)[j]);
-}
-
-void free_rsync_argv(char **argv)
-{
-	int i;
-	for (i = 0; argv[i]; i++)
-		free(argv[i]);
-	free(argv);
-}
-
-int create_snapshot(char **argv)
-{
-	int fds[3] = {0, 0, 0};
-
-	return dss_exec(&rsync_pid, argv[0], argv, fds);
-}
-
 int com_create(void)
 {
 	int ret, status;
@@ -932,8 +946,6 @@ int com_create(void)
 		free(msg);
 		return 1;
 	}
-	DSS_NOTICE_LOG("creating snapshot %lli\n",
-		(long long)current_snapshot_creation_time);
 	ret = create_snapshot(rsync_argv);
 	if (ret < 0)
 		goto out;
@@ -1024,7 +1036,7 @@ static void setup_signal_handling(void)
 {
 	int ret;
 
-	DSS_NOTICE_LOG("setting up signal handlers\n");
+	DSS_INFO_LOG("setting up signal handlers\n");
 	signal_pipe = signal_init(); /* always successful */
 	ret = install_sighandler(SIGINT);
 	if (ret < 0)
@@ -1047,11 +1059,6 @@ int main(int argc, char **argv)
 	int ret;
 
 	cmdline_parser(argc, argv, &conf); /* aborts on errors */
-	if (conf.inputs_num) {
-		ret = -E_SYNTAX;
-		make_err_msg("additional non-options given");
-		goto out;
-	}
 	ret = read_config_file();
 	if (ret < 0)
 		goto out;
