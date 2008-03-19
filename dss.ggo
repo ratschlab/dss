@@ -21,6 +21,17 @@ details="
 	configuration file. As usual, if an option is given both at
 	the command line and in the configuration file, the command
 	line option takes precedence.
+
+	However, there is an important exception to this rule:
+	If the --run option was given (see below) then dss honors
+	SIGHUP and re-reads its configuration file whenever it
+	receives this signal. In this case the options in the config
+	file override any options that were previously given at the
+	command line. This allows to change the configuration of a
+	running dss process on the fly by sending SIGHUP.
+
+	Note that it is not possible to change whether dss runs as
+	background daemon by sending SIGHUP.
 "
 
 option "daemon" d
