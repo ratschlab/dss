@@ -25,20 +25,21 @@ details="
 
 option "daemon" d
 #~~~~~~~~~~~~~~~~
-"run as background daemon"
+"Run as background daemon"
 flag off
 dependon="logfile"
 details="
 	Note that dss refuses to start in daemon mode if no logfile
-	was specified.
+	was specified. This option makes sense only in conjuction
+	with the -R option described below.
 "
 
 option "dry-run" D
 #~~~~~~~~~~~~~~~~~
-"only print what would be done"
+"Only print what would be done"
 flag off
 details="
-	This flag does not makes sense for all commands. The run
+	This flag does not make sense for all commands. The run
 	command refuses to start if this option was given. The ls
 	command silently ignores this flag.
 "
@@ -49,7 +50,7 @@ section "Logging"
 
 option "loglevel" l
 #~~~~~~~~~~~~~~~~~~
-"set loglevel (0-6)"
+"Set loglevel (0-6)"
 int typestr="level"
 default="3"
 optional
@@ -59,7 +60,7 @@ details="
 
 option "logfile" -
 #~~~~~~~~~~~~~~~~~
-"logfile for the dss daemon process"
+"Logfile for the dss daemon process"
 string typestr="filename"
 optional
 details="
@@ -77,15 +78,15 @@ required
 
 groupoption "create" C
 #~~~~~~~~~~~~~~~~~~~~~
-"create a new snapshot"
+"Create a new snapshot"
 group="command"
 details="
-	Execute the rsync command to create a new snapshot.Mote that this
+	Execute the rsync command to create a new snapshot. Note that this
 	command does not care about free disk space.
 "
 groupoption "prune" P
 #~~~~~~~~~~~~~~~~~~~~
-"remove a redundant snapshot"
+"Remove a redundant snapshot"
 group="command"
 details="
 	A snapshot is considered redundant if it ether belongs to
@@ -96,17 +97,17 @@ details="
 
 groupoption "ls" L
 #~~~~~~~~~~~~~~~~~
-"print a list of all snapshots"
+"Print a list of all snapshots"
 group="command"
 details="
-	The list will contain all snapshots not matter of their state,
-	i.e. incomplete snapshots and snapshots being deleted will
+	The list will contain all snapshots no matter of their state,
+	i. e. incomplete snapshots and snapshots being deleted will
 	also be listed.
 "
 
 groupoption "run" R
 #~~~~~~~~~~~~~~~~~~
-"start creating and pruning snapshots"
+"Start creating and pruning snapshots"
 group="command"
 details="
 	This is the main mode of operation. Snapshots will be created
@@ -117,33 +118,33 @@ details="
 section "Rsync-related options"
 ###############################
 
-option "remote-user" U
-#~~~~~~~~~~~~~~~~~~~~~
-"remote user name (default: current user)"
-string typestr="username"
-optional
-details="
-	If a user is specified that differs from the user running
-	dss, then rsync will use ssh for taking snapshots.  This will
-	only work if you set up a key-pair to allow rsync to proceed
-	without asking for passwords.
-"
-
 option "remote-host" H
 #~~~~~~~~~~~~~~~~~~~~~
-"remote host"
+"Remote host"
 string typestr="hostname"
 default="localhost"
 optional
 details="
 	If this option is given and its value differs from the local
-	host, then rsync uses ssh, so make sure the user running dss
-	does not need a password to connect to the remote host.
+	host, then rsync uses ssh. Make sure there is no password
+	needed for the ssh connection. To achieve that, use public key
+	authentication for ssh and, if needed, set the remote user name
+	by using the --remote-user option.
+"
+
+option "remote-user" U
+#~~~~~~~~~~~~~~~~~~~~~
+"Remote user name (default: current user)"
+string typestr="username"
+optional
+details="
+	Set this if the user running dss is different from the
+	user at the remote host when using ssh.
 "
 
 option "source-dir" -
 #~~~~~~~~~~~~~~~~~~~~
-"the data directory"
+"The data directory"
 string typestr="dirname"
 optional
 details="
@@ -154,7 +155,7 @@ details="
 
 option "dest-dir" -
 #~~~~~~~~~~~~~~~~~~
-"snapshot dir"
+"Snapshot dir"
 string typestr="dirname"
 optional
 details="
@@ -165,7 +166,7 @@ details="
 
 option "rsync-option" O
 #~~~~~~~~~~~~~~~~~~~~~~
-"further rsync options"
+"Further rsync options"
 string typestr="option"
 optional
 multiple
@@ -176,7 +177,7 @@ details="
 
 option "exclude-patterns" e
 #~~~~~~~~~~~~~~~~~~~~~~~~~~
-"rsync exclude patterns"
+"Rsync exclude patterns"
 string typestr="path"
 optional
 
@@ -186,7 +187,7 @@ section "Intervals"
 
 option "unit-interval" u
 #~~~~~~~~~~~~~~~~~~~~~~~
-"the duration of a unit interval"
+"The duration of a unit interval"
 int typestr="days"
 default="4"
 optional
@@ -196,7 +197,7 @@ details="
 	\"unit\" interval and the number of those unit intervals.
 
 	dss removes any snapshots older than the given number of intervals
-	times the duration of an unit interval and tries to keep the following
+	times the duration of a unit interval and tries to keep the following
 	number of snapshots per interval:
 
 		interval number		number of snapshots
@@ -212,13 +213,13 @@ details="
 	In other words, the oldest snapshot will at most be unit_interval *
 	num_intervals old (= 5 days * 4 = 20 days if default values are used).
 	Moreover, there are at most 2^num_intervals - 1 snapshots in total
-	(i.e. 31 by default).  Observe that you have to create at least
+	(i. e. 31 by default).  Observe that you have to create at least
 	2 ^ (num_intervals - 1) snapshots each interval for this to work out.
 "
 
 option "num-intervals" n
 #~~~~~~~~~~~~~~~~~~~~~~~
-"the number of unit intervals"
+"The number of unit intervals"
 int typestr="num"
 default="5"
 optional
@@ -257,19 +258,19 @@ details="
 "
 
 ###############################
-section "disk space monitoring"
+section "Disk space monitoring"
 ###############################
 
 option "min-free-mb" m
 #~~~~~~~~~~~~~~~~~~~~~
-"minimal amount of free disk space"
+"Minimal amount of free disk space"
 int typestr="megabytes"
 default="100"
 optional
 details="
-	If less that this many megabytes of space is available on
+	If less than this many megabytes of space is available on
 	the file system containing the destination directory, \"dss
-	--run\" will stop the currently running rsync process and will
+	--run\" will suspend the currently running rsync process and will
 	start to remove snapshots, starting from the oldest snapshot,
 	until the free disk space exceeds this value.  See also the
 	--min_free_percent option.
@@ -280,12 +281,12 @@ details="
 
 option "min-free-percent" p
 #~~~~~~~~~~~~~~~~~~~~~~~~~~
-"minimal percent of free disk space"
+"Minimal percent of free disk space"
 int typestr="percent"
 default="2"
 optional
 details="
-	See --min_free.  Note that it is not recommended to set both
-	--min_fre_mb and --min_free_percent to zero as this will
+	See --min-free-mb.  Note that it is not recommended to set both
+	--min-free-mb and --min-free-percent to zero as this will
 	cause your file system to fill up quickly.
 "
