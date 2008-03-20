@@ -340,7 +340,10 @@ void free_snapshot_list(struct snapshot_list *sl)
 		free(s);
 	}
 	free(sl->interval_count);
+	sl->interval_count = NULL;
 	free(sl->snapshots);
+	sl->snapshots = NULL;
+	sl->num_snapshots = 0;
 }
 
 void stop_rsync_process(void)
@@ -546,9 +549,95 @@ void kill_process(pid_t pid)
 	kill(pid, SIGTERM);
 }
 
-void handle_sighup()
+int check_config(void)
 {
-	DSS_INFO_LOG("FIXME: no sighup handling yet\n");
+	if (conf.unit_interval_arg <= 0) {
+		make_err_msg("bad unit interval: %i", conf.unit_interval_arg);
+		return -E_INVALID_NUMBER;
+	}
+	DSS_DEBUG_LOG("unit interval: %i day(s)\n", conf.unit_interval_arg);
+	if (conf.num_intervals_arg <= 0) {
+		make_err_msg("bad number of intervals  %i", conf.num_intervals_arg);
+		return -E_INVALID_NUMBER;
+	}
+	DSS_DEBUG_LOG("number of intervals: %i\n", conf.num_intervals_arg);
+	return 1;
+}
+
+/* exits on errors */
+void parse_config_file(int override)
+{
+	int ret;
+	char *config_file;
+	struct stat statbuf;
+	char *old_logfile_arg = NULL;
+	int old_daemon_given = 0;
+
+	if (conf.config_file_given)
+		config_file = dss_strdup(conf.config_file_arg);
+	else {
+		char *home = get_homedir();
+		config_file = make_message("%s/.dssrc", home);
+		free(home);
+	}
+	if (override) { /* SIGHUP */
+		if (conf.logfile_given)
+			old_logfile_arg = dss_strdup(conf.logfile_arg);
+		old_daemon_given = conf.daemon_given;
+	}
+
+	ret = stat(config_file, &statbuf);
+	if (ret && conf.config_file_given) {
+		ret = -ERRNO_TO_DSS_ERROR(errno);
+		make_err_msg("failed to stat config file %s", config_file);
+		goto out;
+	}
+	if (!ret) {
+		struct cmdline_parser_params params = {
+			.override = override,
+			.initialize = 0,
+			.check_required = 0,
+			.check_ambiguity = 0
+		};
+		cmdline_parser_config_file(config_file, &conf, &params);
+	}
+	if (!conf.source_dir_given || !conf.dest_dir_given) {
+		ret = -E_SYNTAX;
+		make_err_msg("you need to specify both source_dir and dest_dir");
+		goto out;
+	}
+	ret = check_config();
+	if (ret < 0)
+		goto out;
+	if (override) {
+		/* don't change daemon mode on SIGHUP */
+		conf.daemon_given = old_daemon_given;
+		close_log(logfile);
+		logfile = NULL;
+		if (conf.logfile_given)
+			free(old_logfile_arg);
+		else if (conf.daemon_given) { /* re-use old logfile */
+			conf.logfile_arg = old_logfile_arg;
+			conf.logfile_given = 1;
+		}
+	}
+	if (conf.logfile_given) {
+		logfile = open_log(conf.logfile_arg);
+		log_welcome(conf.loglevel_arg);
+	}
+	ret = dss_chdir(conf.dest_dir_arg);
+out:
+	free(config_file);
+	if (ret >= 0)
+		return;
+	log_err_msg(EMERG, -ret);
+	exit(EXIT_FAILURE);
+}
+
+void handle_sighup(void)
+{
+	DSS_NOTICE_LOG("SIGHUP\n");
+	parse_config_file(1);
 }
 
 int rename_incomplete_snapshot(int64_t start)
@@ -704,7 +793,7 @@ void compute_next_snapshot_time(struct snapshot_list *sl)
 	tv_add(&now, &tmp, &next_snapshot_time);
 }
 
-void handle_signal(struct snapshot_list *sl)
+void handle_signal(void)
 {
 	int sig, ret = next_signal();
 
@@ -722,6 +811,7 @@ void handle_signal(struct snapshot_list *sl)
 		exit(EXIT_FAILURE);
 	case SIGHUP:
 		handle_sighup();
+		ret = 1;
 		break;
 	case SIGCHLD:
 		ret = reap_child(&pid, &status);
@@ -732,9 +822,6 @@ void handle_signal(struct snapshot_list *sl)
 			ret = handle_rsync_exit(status);
 		else
 			ret = handle_rm_exit(status);
-		free_snapshot_list(sl);
-		get_snapshot_list(sl);
-		compute_next_snapshot_time(sl);
 	}
 out:
 	if (ret < 0)
@@ -820,14 +907,15 @@ int select_loop(void)
 	struct timeval tv = {.tv_sec = 0, .tv_usec = 0};
 	struct snapshot_list sl = {.num_snapshots = 0};
 
-	get_snapshot_list(&sl);
-	compute_next_snapshot_time(&sl);
 	for (;;) {
 		struct timeval now, *tvp = &tv;
 		fd_set rfds;
 		int low_disk_space;
 		char **rsync_argv;
 
+		free_snapshot_list(&sl);
+		get_snapshot_list(&sl);
+		compute_next_snapshot_time(&sl);
 		FD_ZERO(&rfds);
 		FD_SET(signal_pipe, &rfds);
 		if (rsync_pid)
@@ -837,8 +925,10 @@ int select_loop(void)
 		ret = dss_select(signal_pipe + 1, &rfds, NULL, tvp);
 		if (ret < 0)
 			return ret;
-		if (FD_ISSET(signal_pipe, &rfds))
-			handle_signal(&sl);
+		if (FD_ISSET(signal_pipe, &rfds)) {
+			handle_signal();
+			continue;
+		}
 		if (rm_pid)
 			continue;
 		ret = disk_space_low();
@@ -978,61 +1068,6 @@ __noreturn void clean_exit(int status)
 	free(dss_error_txt);
 	exit(status);
 }
-
-int read_config_file(void)
-{
-	int ret;
-	char *config_file;
-	struct stat statbuf;
-
-	if (conf.config_file_given)
-		config_file = dss_strdup(conf.config_file_arg);
-	else {
-		char *home = get_homedir();
-		config_file = make_message("%s/.dssrc", home);
-		free(home);
-	}
-	ret = stat(config_file, &statbuf);
-	if (ret && conf.config_file_given) {
-		ret = -ERRNO_TO_DSS_ERROR(errno);
-		make_err_msg("failed to stat config file %s", config_file);
-		goto out;
-	}
-	if (!ret) {
-		struct cmdline_parser_params params = {
-			.override = 0,
-			.initialize = 0,
-			.check_required = 0,
-			.check_ambiguity = 0
-		};
-		cmdline_parser_config_file(config_file, &conf, &params);
-	}
-	if (!conf.source_dir_given || !conf.dest_dir_given) {
-		ret = -E_SYNTAX;
-		make_err_msg("you need to specify both source_dir and dest_dir");
-		goto out;
-	}
-	ret = 1;
-out:
-	free(config_file);
-	return ret;
-}
-
-int check_config(void)
-{
-	if (conf.unit_interval_arg <= 0) {
-		make_err_msg("bad unit interval: %i", conf.unit_interval_arg);
-		return -E_INVALID_NUMBER;
-	}
-	DSS_DEBUG_LOG("unit interval: %i day(s)\n", conf.unit_interval_arg);
-	if (conf.num_intervals_arg <= 0) {
-		make_err_msg("bad number of intervals  %i", conf.num_intervals_arg);
-		return -E_INVALID_NUMBER;
-	}
-	DSS_DEBUG_LOG("number of intervals: %i\n", conf.num_intervals_arg);
-	return 1;
-}
-
 static void setup_signal_handling(void)
 {
 	int ret;
@@ -1059,24 +1094,11 @@ int main(int argc, char **argv)
 	int ret;
 
 	cmdline_parser(argc, argv, &conf); /* aborts on errors */
-	ret = read_config_file();
-	if (ret < 0)
-		goto out;
-	ret = check_config();
-	if (ret < 0)
-		goto out;
-	if (conf.logfile_given) {
-		logfile = open_log(conf.logfile_arg);
-		log_welcome(conf.loglevel_arg);
-	}
-	ret = dss_chdir(conf.dest_dir_arg);
-	if (ret < 0)
-		goto out;
+	parse_config_file(0);
 	if (conf.daemon_given)
 		daemon_init();
 	setup_signal_handling();
 	ret = call_command_handler();
-out:
 	if (ret < 0)
 		log_err_msg(EMERG, -ret);
 	clean_exit(ret >= 0? EXIT_SUCCESS : EXIT_FAILURE);
