@@ -30,7 +30,7 @@ flag off
 dependon="logfile"
 details="
 	Note that dss refuses to start in daemon mode if no logfile
-	was specified. This option makes sense only in conjuction
+	was specified. This option is mostly useful in conjuction
 	with the -R option described below.
 "
 
