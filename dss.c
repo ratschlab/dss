@@ -383,10 +383,14 @@ int wait_for_process(pid_t pid, int *status)
 
 	DSS_DEBUG_LOG("Waiting for process %d to terminate\n", (int)pid);
 	for (;;) {
-		pause();
-		ret = next_signal();
+		fd_set rfds;
+
+		FD_ZERO(&rfds);
+		FD_SET(signal_pipe, &rfds);
+		ret = dss_select(signal_pipe + 1, &rfds, NULL, NULL);
 		if (ret < 0)
 			break;
+		ret = next_signal();
 		if (!ret)
 			continue;
 		if (ret == SIGCHLD) {
@@ -1096,6 +1100,7 @@ int main(int argc, char **argv)
 
 	cmdline_parser_ext(argc, argv, &conf, &params); /* aborts on errors */
 	parse_config_file(0);
+
 	if (conf.daemon_given)
 		daemon_init();
 	setup_signal_handling();
