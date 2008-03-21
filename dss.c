@@ -596,15 +596,10 @@ void parse_config_file(int override)
 		struct cmdline_parser_params params = {
 			.override = override,
 			.initialize = 0,
-			.check_required = 0,
+			.check_required = 1,
 			.check_ambiguity = 0
 		};
 		cmdline_parser_config_file(config_file, &conf, &params);
-	}
-	if (!conf.source_dir_given || !conf.dest_dir_given) {
-		ret = -E_SYNTAX;
-		make_err_msg("you need to specify both source_dir and dest_dir");
-		goto out;
 	}
 	ret = check_config();
 	if (ret < 0)
@@ -1092,8 +1087,14 @@ err:
 int main(int argc, char **argv)
 {
 	int ret;
+	struct cmdline_parser_params params = {
+		.override = 0,
+		.initialize = 1,
+		.check_required = 0,
+		.check_ambiguity = 0
+	};
 
-	cmdline_parser(argc, argv, &conf); /* aborts on errors */
+	cmdline_parser_ext(argc, argv, &conf, &params); /* aborts on errors */
 	parse_config_file(0);
 	if (conf.daemon_given)
 		daemon_init();

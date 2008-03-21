@@ -157,7 +157,7 @@ option "source-dir" -
 #~~~~~~~~~~~~~~~~~~~~
 "The data directory"
 string typestr="dirname"
-optional
+required
 details="
 	The directory on the remote host from which snapshots are
 	taken.	Of course, the user specified as --remote-user must
@@ -168,7 +168,7 @@ option "dest-dir" -
 #~~~~~~~~~~~~~~~~~~
 "Snapshot dir"
 string typestr="dirname"
-optional
+required
 details="
 	The destination directory on the local host where snapshots
 	will be written. This must be writable by the user who runs
