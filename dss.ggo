@@ -29,9 +29,6 @@ details="
 	file override any options that were previously given at the
 	command line. This allows to change the configuration of a
 	running dss process on the fly by sending SIGHUP.
-
-	Note that it is not possible to change whether dss runs as
-	background daemon by sending SIGHUP.
 "
 
 option "daemon" d
@@ -43,6 +40,9 @@ details="
 	Note that dss refuses to start in daemon mode if no logfile
 	was specified. This option is mostly useful in conjuction
 	with the -R option described below.
+
+	Note that it is not possible to change whether dss runs as
+	background daemon by sending SIGHUP.
 "
 
 option "dry-run" D
@@ -66,7 +66,7 @@ int typestr="level"
 default="3"
 optional
 details="
-	Lower values mean less verbose logging.
+	Lower values mean more verbose logging.
 "
 
 option "logfile" -
@@ -82,8 +82,9 @@ details="
 defgroup "command"
 #=================
 groupdesc="
-	dss supports a couple of commands each of which corresponds to a different
-	command line option. Exactly one of these options must be given.
+	dss supports a couple of commands each of which corresponds
+	to a different command line option. Exactly one of these
+	options must be given.
 "
 required
 
@@ -92,9 +93,10 @@ groupoption "create" C
 "Create a new snapshot"
 group="command"
 details="
-	Execute the rsync command to create a new snapshot. Note that this
-	command does not care about free disk space.
+	Execute the rsync command to create a new snapshot. Note that
+	this command does not care about free disk space.
 "
+
 groupoption "prune" P
 #~~~~~~~~~~~~~~~~~~~~
 "Remove a redundant snapshot"
@@ -203,29 +205,21 @@ int typestr="days"
 default="4"
 optional
 details="
-	dss snapshot aging is implemented in terms of intervals. There are
-	two command line options related to intervals: the duration of a
-	\"unit\" interval and the number of those unit intervals.
+	dss snapshot aging is implemented in terms of intervals. There
+	are two command line options related to intervals: the
+	duration u of a \"unit\" interval and the number n of those
+	unit intervals.
 
-	dss removes any snapshots older than the given number of intervals
-	times the duration of a unit interval and tries to keep the following
-	number of snapshots per interval:
+	dss removes any snapshots older than n times u and tries to
+	keep 2^(k-1) snapshots in interval k, where the interval number
+	k counts from zero, zero being the most recent unit interval.
 
-		interval number		number of snapshots
-		===============================================
-		0	 		2 ^ (num-intervals - 1)
-		1			2 ^ (num-intervals - 2)
-		2			2 ^ (num-intervals - 3)
-		...
-		num-intervals - 2			2
-		num-intervals - 1			1
-		num-intervals				0
-
-	In other words, the oldest snapshot will at most be unit_interval *
-	num_intervals old (= 5 days * 4 = 20 days if default values are used).
-	Moreover, there are at most 2^num_intervals - 1 snapshots in total
-	(i. e. 31 by default).  Observe that you have to create at least
-	2 ^ (num_intervals - 1) snapshots each interval for this to work out.
+	In other words, the oldest snapshot will at most be u * n days
+	(= 20 days if default values are used) old.  Moreover, there
+	are at most 2^n - 1 snapshots in total (i. e. 31 by default).
+	Observe that you have to create at least 2 ^ (n - 1) snapshots
+	each interval for this to work out because that is the number
+	of snapshots in interval zero.
 "
 
 option "num-intervals" n
