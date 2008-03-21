@@ -42,8 +42,25 @@ static int rsync_stopped;
 static pid_t rm_pid;
 /** When the next snapshot is due. */
 struct timeval next_snapshot_time;
+
+pid_t pre_create_hook_pid;
+pid_t post_create_hook_pid;
+
 /* Creation time of the snapshot currently being created. */
 int64_t current_snapshot_creation_time;
+
+static char *path_to_last_complete_snapshot;
+
+enum {
+	SCS_READY,
+	SCS_PRE_HOOK_RUNNING,
+	SCS_PRE_HOOK_SUCCESS,
+	SCS_RSYNC_RUNNING,
+	SCS_RSYNC_SUCCESS,
+	SCS_POST_HOOK_RUNNING,
+};
+
+static unsigned snapshot_creation_status;
 
 
 DEFINE_DSS_ERRLIST;
@@ -449,8 +466,8 @@ int remove_redundant_snapshot(struct snapshot_list *sl)
 
 		if (keep >= num)
 			missing += keep - num;
-		DSS_DEBUG_LOG("interval %i: keep: %u, have: %u, missing: %u\n",
-			interval, keep, num, missing);
+//		DSS_DEBUG_LOG("interval %i: keep: %u, have: %u, missing: %u\n",
+//			interval, keep, num, missing);
 		if (keep + missing >= num)
 			continue;
 		/* redundant snapshot in this interval, pick snapshot with lowest score */
@@ -624,6 +641,8 @@ void parse_config_file(int override)
 		logfile = open_log(conf.logfile_arg);
 		log_welcome(conf.loglevel_arg);
 	}
+	DSS_EMERG_LOG("loglevel: %d\n", conf.loglevel_arg);
+//	cmdline_parser_dump(logfile? logfile : stdout, &conf);
 	ret = dss_chdir(conf.dest_dir_arg);
 out:
 	free(config_file);
@@ -641,19 +660,63 @@ void handle_sighup(void)
 
 int rename_incomplete_snapshot(int64_t start)
 {
-	char *old_name, *new_name;
+	char *old_name;
 	int ret;
 
-	ret = complete_name(start, get_current_time(), &new_name);
+	free(path_to_last_complete_snapshot);
+	ret = complete_name(start, get_current_time(),
+		&path_to_last_complete_snapshot);
 	if (ret < 0)
 		return ret;
 	old_name = incomplete_name(start);
-	ret = dss_rename(old_name, new_name);
+	ret = dss_rename(old_name, path_to_last_complete_snapshot);
 	if (ret >= 0)
-		DSS_NOTICE_LOG("%s -> %s\n", old_name, new_name);
+		DSS_NOTICE_LOG("%s -> %s\n", old_name,
+			path_to_last_complete_snapshot);
 	free(old_name);
-	free(new_name);
 	return ret;
+}
+
+void compute_next_snapshot_time(void)
+{
+	struct timeval now, unit_interval = {.tv_sec = 24 * 3600 * conf.unit_interval_arg},
+		tmp, diff;
+	int64_t x = 0;
+	unsigned wanted = num_snapshots(0), num_complete_snapshots = 0;
+	int i, ret;
+	struct snapshot *s = NULL;
+	struct snapshot_list sl;
+
+	assert(snapshot_creation_status == SCS_READY);
+	current_snapshot_creation_time = 0;
+	get_snapshot_list(&sl);
+	FOR_EACH_SNAPSHOT(s, i, &sl) {
+		if (!(s->flags & SS_COMPLETE))
+			continue;
+		num_complete_snapshots++;
+		x += s->completion_time - s->creation_time;
+	}
+	assert(x >= 0);
+	if (num_complete_snapshots)
+		x /= num_complete_snapshots; /* avg time to create one snapshot */
+	x *= wanted; /* time to create all snapshots in interval 0 */
+	tmp.tv_sec = x;
+	tmp.tv_usec = 0;
+	ret = tv_diff(&unit_interval, &tmp, &diff); /* total sleep time per unit interval */
+	gettimeofday(&now, NULL);
+	if (ret < 0 || !s)
+		goto min_sleep;
+	tv_divide(wanted, &diff, &tmp); /* sleep time betweeen two snapshots */
+	diff.tv_sec = s->completion_time;
+	diff.tv_usec = 0;
+	tv_add(&diff, &tmp, &next_snapshot_time);
+	if (tv_diff(&now, &next_snapshot_time, NULL) < 0)
+		goto out;
+min_sleep:
+	next_snapshot_time = now;
+	next_snapshot_time.tv_sec += 60;
+out:
+	free_snapshot_list(&sl);
 }
 
 int handle_rsync_exit(int status)
@@ -663,18 +726,24 @@ int handle_rsync_exit(int status)
 	if (!WIFEXITED(status)) {
 		make_err_msg("rsync process %d died involuntary", (int)rsync_pid);
 		ret = -E_INVOLUNTARY_EXIT;
+		snapshot_creation_status = SCS_READY;
+		compute_next_snapshot_time();
 		goto out;
 	}
 	es = WEXITSTATUS(status);
 	if (es != 0 && es != 23 && es != 24) {
 		make_err_msg("rsync process %d returned %d", (int)rsync_pid, es);
 		ret = -E_BAD_EXIT_CODE;
+		snapshot_creation_status = SCS_READY;
+		compute_next_snapshot_time();
 		goto out;
 	}
 	ret = rename_incomplete_snapshot(current_snapshot_creation_time);
+	if (ret < 0)
+		goto out;
+	snapshot_creation_status = SCS_RSYNC_SUCCESS;
 out:
 	rsync_pid = 0;
-	current_snapshot_creation_time = 0;
 	rsync_stopped = 0;
 	return ret;
 }
@@ -751,45 +820,107 @@ void free_rsync_argv(char **argv)
 	free(argv);
 }
 
-int create_snapshot(char **argv)
+int pre_create_hook(void)
 {
-	int fds[3] = {0, 0, 0};
-	char *name = incomplete_name(current_snapshot_creation_time);
+	int ret, fds[3] = {0, 0, 0};
 
-	DSS_NOTICE_LOG("creating new snapshot %s\n", name);
-	free(name);
-	return dss_exec(&rsync_pid, argv[0], argv, fds);
+	if (!conf.pre_create_hook_given) {
+		snapshot_creation_status = SCS_PRE_HOOK_SUCCESS;
+		return 0;
+	}
+	DSS_NOTICE_LOG("executing %s\n", conf.pre_create_hook_arg);
+	ret = dss_exec_cmdline_pid(&pre_create_hook_pid,
+		conf.pre_create_hook_arg, fds);
+	if (ret < 0)
+		return ret;
+	snapshot_creation_status = SCS_PRE_HOOK_RUNNING;
+	return ret;
 }
 
-void compute_next_snapshot_time(struct snapshot_list *sl)
+int post_create_hook(void)
 {
-	struct timeval now, unit_interval = {.tv_sec = 24 * 3600 * conf.unit_interval_arg},
-		tmp, diff;
-	int64_t x = 0;
-	unsigned wanted = num_snapshots(0), num_complete_snapshots = 0;
-	int i, ret;
-	struct snapshot *s;
+	int ret, fds[3] = {0, 0, 0};
+	char *cmd;
 
-	gettimeofday(&now, NULL);
-	FOR_EACH_SNAPSHOT(s, i, sl) {
-		if (!(s->flags & SS_COMPLETE))
-			continue;
-		num_complete_snapshots++;
-		x += s->completion_time - s->creation_time;
+	if (!conf.post_create_hook_given) {
+		snapshot_creation_status = SCS_READY;
+		compute_next_snapshot_time();
+		return 0;
 	}
-	assert(x >= 0);
-	if (num_complete_snapshots)
-		x /= num_complete_snapshots; /* avg time to create one snapshot */
-	x *= wanted; /* time to create all snapshots in interval 0 */
-	tmp.tv_sec = x;
-	tmp.tv_usec = 0;
-	ret = tv_diff(&unit_interval, &tmp, &diff); /* time between creation */
-	if (ret < 0) {
-		next_snapshot_time = now;
-		return;
+	cmd = make_message("%s %s", conf.post_create_hook_arg,
+		path_to_last_complete_snapshot);
+	DSS_NOTICE_LOG("executing %s\n", cmd);
+	ret = dss_exec_cmdline_pid(&post_create_hook_pid, cmd, fds);
+	free(cmd);
+	if (ret < 0)
+		return ret;
+	snapshot_creation_status = SCS_POST_HOOK_RUNNING;
+	return ret;
+}
+
+int create_snapshot(char **argv)
+{
+	int ret, fds[3] = {0, 0, 0};
+	char *name;
+
+	name = incomplete_name(current_snapshot_creation_time);
+	DSS_NOTICE_LOG("creating new snapshot %s\n", name);
+	free(name);
+	ret = dss_exec(&rsync_pid, argv[0], argv, fds);
+	if (ret < 0)
+		return ret;
+	snapshot_creation_status = SCS_RSYNC_RUNNING;
+	return ret;
+}
+
+int handle_pre_create_hook_exit(int status)
+{
+	int es, ret;
+
+	if (!WIFEXITED(status)) {
+		make_err_msg("pre-create-hook %d died involuntary",
+			(int)pre_create_hook_pid);
+		snapshot_creation_status = SCS_READY;
+		compute_next_snapshot_time();
+		ret = -E_INVOLUNTARY_EXIT;
+		goto out;
 	}
-	tv_divide(wanted, &diff, &tmp);
-	tv_add(&now, &tmp, &next_snapshot_time);
+	es = WEXITSTATUS(status);
+	if (es) {
+		make_err_msg("pre-create-hook %d returned %d",
+			(int)pre_create_hook_pid, es);
+		snapshot_creation_status = SCS_READY;
+		compute_next_snapshot_time();
+		ret = -E_BAD_EXIT_CODE;
+		goto out;
+	}
+	snapshot_creation_status = SCS_PRE_HOOK_SUCCESS;
+	ret = 1;
+out:
+	pre_create_hook_pid = 0;
+	return ret;
+}
+
+int handle_sigchld()
+{
+	pid_t pid;
+	int status, ret = reap_child(&pid, &status);
+
+	if (ret <= 0)
+		return ret;
+	if (pid == rsync_pid)
+		return handle_rsync_exit(status);
+	if (pid == rm_pid)
+		return handle_rm_exit(status);
+	if (pid == pre_create_hook_pid)
+		return handle_pre_create_hook_exit(status);
+	if (pid == post_create_hook_pid) {
+		snapshot_creation_status = SCS_READY;
+		compute_next_snapshot_time();
+		return 1;
+	}
+	DSS_EMERG_LOG("BUG: unknown process %d died\n", (int)pid);
+	exit(EXIT_FAILURE);
 }
 
 void handle_signal(void)
@@ -800,8 +931,6 @@ void handle_signal(void)
 		goto out;
 	sig = ret;
 	switch (sig) {
-		int status;
-		pid_t pid;
 	case SIGINT:
 	case SIGTERM:
 		restart_rsync_process();
@@ -813,14 +942,8 @@ void handle_signal(void)
 		ret = 1;
 		break;
 	case SIGCHLD:
-		ret = reap_child(&pid, &status);
-		if (ret <= 0)
-			break;
-		assert(pid == rsync_pid || pid == rm_pid);
-		if (pid == rsync_pid)
-			ret = handle_rsync_exit(status);
-		else
-			ret = handle_rm_exit(status);
+		ret = handle_sigchld();
+		break;
 	}
 out:
 	if (ret < 0)
@@ -879,55 +1002,56 @@ int disk_space_low(void)
 	return 0;
 }
 
-int try_to_free_disk_space(int low_disk_space, struct snapshot_list *sl)
+int try_to_free_disk_space(int low_disk_space)
 {
 	int ret;
+	struct snapshot_list sl;
 
-	ret = remove_outdated_snapshot(sl);
+	get_snapshot_list(&sl);
+	ret = remove_outdated_snapshot(&sl);
 	if (ret) /* error, or we are removing something */
-		return ret;
+		goto out;
 	/* no outdated snapshot */
-	ret = remove_redundant_snapshot(sl);
+	ret = remove_redundant_snapshot(&sl);
 	if (ret)
-		return ret;
+		goto out;
+	ret = 0;
 	if (!low_disk_space)
-		return 0;
+		goto out;
 	DSS_WARNING_LOG("disk space low and nothing obvious to remove\n");
 	ret = remove_oldest_snapshot();
 	if (ret)
-		return ret;
+		goto out;
 	make_err_msg("uhuhu: not enough disk space for a single snapshot");
-	return  -ENOSPC;
+	ret= -ENOSPC;
+out:
+	free_snapshot_list(&sl);
+	return ret;
 }
 
 int select_loop(void)
 {
 	int ret;
 	struct timeval tv = {.tv_sec = 0, .tv_usec = 0};
-	struct snapshot_list sl = {.num_snapshots = 0};
 
 	for (;;) {
-		struct timeval now, *tvp = &tv;
 		fd_set rfds;
 		int low_disk_space;
 		char **rsync_argv;
+		struct timeval now, *tvp = &tv;
 
-		free_snapshot_list(&sl);
-		get_snapshot_list(&sl);
-		compute_next_snapshot_time(&sl);
+		if (rsync_pid)
+			tv.tv_sec = 60; /* check every 60 seconds for free disk space */
+		else if (rm_pid)
+			tvp = NULL; /* sleep until rm process dies */
 		FD_ZERO(&rfds);
 		FD_SET(signal_pipe, &rfds);
-		if (rsync_pid)
-			tv.tv_sec = 60;
-		else if (rm_pid)
-			tvp = NULL;
+		DSS_DEBUG_LOG("tvp: %p, tv_sec: %lu\n", tvp, (long unsigned) tv.tv_sec);
 		ret = dss_select(signal_pipe + 1, &rfds, NULL, tvp);
 		if (ret < 0)
 			return ret;
-		if (FD_ISSET(signal_pipe, &rfds)) {
+		if (FD_ISSET(signal_pipe, &rfds))
 			handle_signal();
-			continue;
-		}
 		if (rm_pid)
 			continue;
 		ret = disk_space_low();
@@ -936,26 +1060,42 @@ int select_loop(void)
 		low_disk_space = ret;
 		if (low_disk_space)
 			stop_rsync_process();
-		ret = try_to_free_disk_space(low_disk_space, &sl);
+		ret = try_to_free_disk_space(low_disk_space);
 		if (ret < 0)
 			break;
 		if (rm_pid)
 			continue;
-		if (rsync_pid) {
-			restart_rsync_process();
-			continue;
-		}
-		/* neither rsync nor rm are running. Start rsync? */
+		restart_rsync_process();
 		gettimeofday(&now, NULL);
 		if (tv_diff(&next_snapshot_time, &now, &tv) > 0)
 			continue;
-		create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
-		ret = create_snapshot(rsync_argv);
-		free_rsync_argv(rsync_argv);
-		if (ret < 0)
-			break;
+		switch (snapshot_creation_status) {
+		case SCS_READY:
+			ret = pre_create_hook();
+			if (ret < 0)
+				goto out;
+			continue;
+		case SCS_PRE_HOOK_RUNNING:
+			continue;
+		case SCS_PRE_HOOK_SUCCESS:
+			create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
+			ret = create_snapshot(rsync_argv);
+			free_rsync_argv(rsync_argv);
+			if (ret < 0)
+				goto out;
+			continue;
+		case SCS_RSYNC_RUNNING:
+			continue;
+		case SCS_RSYNC_SUCCESS:
+			ret = post_create_hook();
+			if (ret < 0)
+				goto out;
+			continue;
+		case SCS_POST_HOOK_RUNNING:
+			continue;
+		}
 	}
-	free_snapshot_list(&sl);
+out:
 	return ret;
 }
 
@@ -970,6 +1110,7 @@ int com_run(void)
 	ret = install_sighandler(SIGHUP);
 	if (ret < 0)
 		return ret;
+	compute_next_snapshot_time();
 	return select_loop();
 }
 
@@ -1024,20 +1165,33 @@ int com_create(void)
 	int ret, status;
 	char **rsync_argv;
 
-	create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
 	if (conf.dry_run_given) {
 		int i;
 		char *msg = NULL;
+		create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
 		for (i = 0; rsync_argv[i]; i++) {
 			char *tmp = msg;
 			msg = make_message("%s%s%s", tmp? tmp : "",
 				tmp? " " : "", rsync_argv[i]);
 			free(tmp);
 		}
+		free_rsync_argv(rsync_argv);
 		dss_msg("%s\n", msg);
 		free(msg);
 		return 1;
 	}
+	ret = pre_create_hook();
+	if (ret < 0)
+		return ret;
+	if (pre_create_hook_pid) {
+		ret = wait_for_process(pre_create_hook_pid, &status);
+		if (ret < 0)
+			return ret;
+		ret = handle_pre_create_hook_exit(status);
+		if (ret < 0)
+			return ret;
+	}
+	create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
 	ret = create_snapshot(rsync_argv);
 	if (ret < 0)
 		goto out;
@@ -1045,6 +1199,11 @@ int com_create(void)
 	if (ret < 0)
 		goto out;
 	ret = handle_rsync_exit(status);
+	if (ret < 0)
+		goto out;
+	post_create_hook();
+	if (post_create_hook_pid)
+		ret = wait_for_process(post_create_hook_pid, &status);
 out:
 	free_rsync_argv(rsync_argv);
 	return ret;

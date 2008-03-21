@@ -236,3 +236,52 @@ __must_check __malloc char *dss_logname(void)
 	return dss_strdup(pw? pw->pw_name : "unknown_user");
 }
 
+/**
+ * Split string and return pointers to its parts.
+ *
+ * \param args The string to be split.
+ * \param argv_ptr Pointer to the list of substrings.
+ * \param delim Delimiter.
+ *
+ * This function modifies \a args by replacing each occurance of \a delim by
+ * zero. A \p NULL-terminated array of pointers to char* is allocated dynamically
+ * and these pointers are initialized to point to the broken-up substrings
+ * within \a args. A pointer to this array is returned via \a argv_ptr.
+ *
+ * \return The number of substrings found in \a args.
+ */
+__must_check unsigned split_args(char *args, char *** const argv_ptr, const char *delim)
+{
+	char *p = args;
+	char **argv;
+	size_t n = 0, i, j;
+
+	p = args + strspn(args, delim);
+	for (;;) {
+		i = strcspn(p, delim);
+		if (!i)
+			break;
+		p += i;
+		n++;
+		p += strspn(p, delim);
+	}
+	*argv_ptr = dss_malloc((n + 1) * sizeof(char *));
+	argv = *argv_ptr;
+	i = 0;
+	p = args + strspn(args, delim);
+	while (p) {
+		argv[i] = p;
+		j = strcspn(p, delim);
+		if (!j)
+			break;
+		p += strcspn(p, delim);
+		if (*p) {
+			*p = '\0';
+			p++;
+			p += strspn(p, delim);
+		}
+		i++;
+	}
+	argv[n] = NULL;
+	return n;
+}

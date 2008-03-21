@@ -113,3 +113,42 @@ err_out:
 		close(null);
 	return ret;
 }
+
+
+/**
+ * Exec the given command.
+ *
+ * \param pid Will hold the pid of the created process upon return.
+ * \param cmdline Holds the command and its arguments, seperated by spaces.
+ * \param fds A pointer to a value-result array.
+ *
+ * This function uses fork/exec to create a new process. \a fds must be a
+ * pointer to three integers, corresponding to stdin, stdout and stderr
+ * respectively. It specifies how to deal with fd 0, 1, 2 in the child. The
+ * contents of \a fds are interpreted as follows:
+ *
+ *	- fd[i] < 0: leave fd \a i alone.
+ *	- fd[i] = 0: dup fd \a i to \p /dev/null.
+ *	- fd[i] > 0: create a pipe and dup i to one end of that pipe.
+ *	Upon return, fd[i] contains the file descriptor of the pipe.
+ *
+ * 	In any case, all unneeded filedescriptors are closed.
+ *
+ * \return Standard.
+ */
+int dss_exec_cmdline_pid(pid_t *pid, const char *cmdline, int *fds)
+{
+	int argc, ret;
+	char **argv;
+	char *tmp = dss_strdup(cmdline);
+
+	if (!tmp)
+		exit(EXIT_FAILURE);
+	argc = split_args(tmp, &argv, " \t");
+	ret = dss_exec(pid, argv[0], argv, fds);
+	free(argv);
+	free(tmp);
+	return ret;
+}
+
+

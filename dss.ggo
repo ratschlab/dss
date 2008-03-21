@@ -243,29 +243,34 @@ option "pre-create-hook" r
 #~~~~~~~~~~~~~~~~~~~~~~~~~~
 "Executed before snapshot creation"
 string typestr="command"
-default="/bin/true"
 optional
 details="
 	Execute this command before trying to create a new snapshot.
-	If this command returns with a non-zero exit status, do not
-	perform the backup. One possible application of this is to
-	return non-zero during office hours in order to not slow down
-	the file systems by taking snapshots.
-"
+	If this command returns with a non-zero exit status, no
+	snapshot is being created and the operation is retried later.
 
+	For example, one might want to execute a script that checks
+	whether all snapshot-related file systems are properly mounted.
+
+	Another possible application of this is to return non-zero
+	during office hours in order to not slow down the file systems
+	by taking snapshots.
+"
 
 option "post-create-hook" o
 #~~~~~~~~~~~~~~~~~~~~~~~~~~
 "Executed after snapshot creation"
 string typestr="command"
-default="/bin/true"
 optional
 details="
-	Execute this after a snapshot has successfully been created
-	The return value on the command is ignored. For instance one
-	could count the number of files per user and/or the disk
-	usage patterns in order to store them in a database for
-	further treatment.
+	Execute this after a snapshot has successfully been
+	created. The full path of the newly created snapshot is passed
+	to the hook as the first argument.  The return value of that
+	hook is ignored.
+
+	For instance this hook can be used to count the number of
+	files per user and/or the disk usage patterns in order to
+	store them in a database for further treatment.
 "
 
 ###############################
