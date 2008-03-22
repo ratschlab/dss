@@ -41,13 +41,13 @@ static int rsync_stopped;
 /** Process id of current rm process. */
 static pid_t rm_pid;
 /** When the next snapshot is due. */
-struct timeval next_snapshot_time;
+static struct timeval next_snapshot_time;
 /** The pid of the pre-create hook. */
-pid_t pre_create_hook_pid;
+static pid_t pre_create_hook_pid;
 /** The pid of the post-create hook. */
-pid_t post_create_hook_pid;
+static pid_t post_create_hook_pid;
 /* Creation time of the snapshot currently being created. */
-int64_t current_snapshot_creation_time;
+static int64_t current_snapshot_creation_time;
 
 static char *path_to_last_complete_snapshot;
 
@@ -63,11 +63,11 @@ DEFINE_DSS_ERRLIST;
 	COMMAND(create) \
 	COMMAND(prune) \
 	COMMAND(run)
-#define COMMAND(x) int com_ ##x(void);
+#define COMMAND(x) static int com_ ##x(void);
 COMMANDS
 #undef COMMAND
 #define COMMAND(x) if (conf.x ##_given) return com_ ##x();
-int call_command_handler(void)
+static int call_command_handler(void)
 {
 	COMMANDS
 	DSS_EMERG_LOG("BUG: did not find command handler\n");
@@ -101,7 +101,7 @@ __printf_2_3 void dss_log(int ll, const char* fmt,...)
 /**
  * Print a message either to stdout or to the log file.
  */
-__printf_1_2 void dss_msg(const char* fmt,...)
+static __printf_1_2 void dss_msg(const char* fmt,...)
 {
 	FILE *outfd = conf.daemon_given? logfile : stdout;
 	va_list argp;
@@ -111,7 +111,7 @@ __printf_1_2 void dss_msg(const char* fmt,...)
 }
 
 /* TODO: Also consider number of inodes. */
-int disk_space_low(void)
+static int disk_space_low(void)
 {
 	struct disk_space ds;
 	int ret = get_disk_space(".", &ds);
@@ -127,12 +127,12 @@ int disk_space_low(void)
 	return 0;
 }
 
-void dss_get_snapshot_list(struct snapshot_list *sl)
+static void dss_get_snapshot_list(struct snapshot_list *sl)
 {
 	get_snapshot_list(sl, conf.unit_interval_arg, conf.num_intervals_arg);
 }
 
-void compute_next_snapshot_time(void)
+static void compute_next_snapshot_time(void)
 {
 	struct timeval now, unit_interval = {.tv_sec = 24 * 3600 * conf.unit_interval_arg},
 		tmp, diff;
@@ -176,7 +176,7 @@ out:
 }
 
 
-int remove_snapshot(struct snapshot *s)
+static int remove_snapshot(struct snapshot *s)
 {
 	int fds[3] = {0, 0, 0};
 	assert(!rm_pid);
@@ -196,7 +196,7 @@ out:
 /*
  * return: 0: no redundant snapshots, 1: rm process started, negative: error
  */
-int remove_redundant_snapshot(struct snapshot_list *sl)
+static int remove_redundant_snapshot(struct snapshot_list *sl)
 {
 	int ret, i, interval;
 	struct snapshot *s;
@@ -254,7 +254,7 @@ int remove_redundant_snapshot(struct snapshot_list *sl)
 	return 0;
 }
 
-int remove_outdated_snapshot(struct snapshot_list *sl)
+static int remove_outdated_snapshot(struct snapshot_list *sl)
 {
 	int i, ret;
 	struct snapshot *s;
@@ -277,7 +277,7 @@ int remove_outdated_snapshot(struct snapshot_list *sl)
 	return 0;
 }
 
-int remove_oldest_snapshot(struct snapshot_list *sl)
+static int remove_oldest_snapshot(struct snapshot_list *sl)
 {
 	struct snapshot *s = get_oldest_snapshot(sl);
 
@@ -289,7 +289,7 @@ int remove_oldest_snapshot(struct snapshot_list *sl)
 	return remove_snapshot(s);
 }
 
-int rename_incomplete_snapshot(int64_t start)
+static int rename_incomplete_snapshot(int64_t start)
 {
 	char *old_name;
 	int ret;
@@ -308,7 +308,7 @@ int rename_incomplete_snapshot(int64_t start)
 	return ret;
 }
 
-int try_to_free_disk_space(int low_disk_space)
+static int try_to_free_disk_space(int low_disk_space)
 {
 	int ret;
 	struct snapshot_list sl;
@@ -335,7 +335,7 @@ out:
 	return ret;
 }
 
-int pre_create_hook(void)
+static int pre_create_hook(void)
 {
 	int ret, fds[3] = {0, 0, 0};
 
@@ -352,7 +352,7 @@ int pre_create_hook(void)
 	return ret;
 }
 
-int post_create_hook(void)
+static int post_create_hook(void)
 {
 	int ret, fds[3] = {0, 0, 0};
 	char *cmd;
@@ -373,7 +373,7 @@ int post_create_hook(void)
 	return ret;
 }
 
-void kill_process(pid_t pid)
+static void kill_process(pid_t pid)
 {
 	if (!pid)
 		return;
@@ -381,7 +381,7 @@ void kill_process(pid_t pid)
 	kill(pid, SIGTERM);
 }
 
-void stop_rsync_process(void)
+static void stop_rsync_process(void)
 {
 	if (!rsync_pid || rsync_stopped)
 		return;
@@ -389,7 +389,7 @@ void stop_rsync_process(void)
 	rsync_stopped = 1;
 }
 
-void restart_rsync_process(void)
+static void restart_rsync_process(void)
 {
 	if (!rsync_pid || !rsync_stopped)
 		return;
@@ -401,7 +401,7 @@ void restart_rsync_process(void)
 /**
  * Print a log message about the exit status of a child.
  */
-void log_termination_msg(pid_t pid, int status)
+static void log_termination_msg(pid_t pid, int status)
 {
 	if (WIFEXITED(status))
 		DSS_INFO_LOG("child %i exited. Exit status: %i\n", (int)pid,
@@ -413,7 +413,7 @@ void log_termination_msg(pid_t pid, int status)
 		DSS_WARNING_LOG("child %i terminated abormally\n", (int)pid);
 }
 
-int wait_for_process(pid_t pid, int *status)
+static int wait_for_process(pid_t pid, int *status)
 {
 	int ret;
 
@@ -448,7 +448,8 @@ int wait_for_process(pid_t pid, int *status)
 		log_termination_msg(pid, *status);
 	return ret;
 }
-int handle_rm_exit(int status)
+
+static int handle_rm_exit(int status)
 {
 	rm_pid = 0;
 	if (!WIFEXITED(status))
@@ -458,7 +459,7 @@ int handle_rm_exit(int status)
 	return 1;
 }
 
-int wait_for_rm_process(void)
+static int wait_for_rm_process(void)
 {
 	int status, ret = wait_for_process(rm_pid, &status);
 
@@ -467,7 +468,7 @@ int wait_for_rm_process(void)
 	return handle_rm_exit(status);
 }
 
-int handle_rsync_exit(int status)
+static int handle_rsync_exit(int status)
 {
 	int es, ret;
 
@@ -496,7 +497,7 @@ out:
 	return ret;
 }
 
-int handle_pre_create_hook_exit(int status)
+static int handle_pre_create_hook_exit(int status)
 {
 	int es, ret;
 
@@ -520,7 +521,7 @@ out:
 	return ret;
 }
 
-int handle_sigchld(void)
+static int handle_sigchld(void)
 {
 	pid_t pid;
 	int status, ret = reap_child(&pid, &status);
@@ -543,7 +544,7 @@ int handle_sigchld(void)
 }
 
 
-int check_config(void)
+static int check_config(void)
 {
 	if (conf.unit_interval_arg <= 0) {
 		DSS_ERROR_LOG("bad unit interval: %i\n", conf.unit_interval_arg);
@@ -559,7 +560,7 @@ int check_config(void)
 }
 
 /* exits on errors */
-void parse_config_file(int override)
+static void parse_config_file(int override)
 {
 	int ret;
 	char *config_file;
@@ -625,13 +626,13 @@ out:
 	exit(EXIT_FAILURE);
 }
 
-void handle_sighup(void)
+static void handle_sighup(void)
 {
 	DSS_NOTICE_LOG("SIGHUP\n");
 	parse_config_file(1);
 }
 
-void handle_signal(void)
+static void handle_signal(void)
 {
 	int sig, ret = next_signal();
 
@@ -658,7 +659,7 @@ out:
 		DSS_ERROR_LOG("%s\n", dss_strerror(-ret));
 }
 
-void create_rsync_argv(char ***argv, int64_t *num)
+static void create_rsync_argv(char ***argv, int64_t *num)
 {
 	char *logname, *newest;
 	int i = 0, j;
@@ -700,7 +701,7 @@ void create_rsync_argv(char ***argv, int64_t *num)
 		DSS_DEBUG_LOG("argv[%d] = %s\n", j, (*argv)[j]);
 }
 
-void free_rsync_argv(char **argv)
+static void free_rsync_argv(char **argv)
 {
 	int i;
 	for (i = 0; argv[i]; i++)
@@ -708,7 +709,7 @@ void free_rsync_argv(char **argv)
 	free(argv);
 }
 
-int create_snapshot(char **argv)
+static int create_snapshot(char **argv)
 {
 	int ret, fds[3] = {0, 0, 0};
 	char *name;
@@ -723,7 +724,7 @@ int create_snapshot(char **argv)
 	return ret;
 }
 
-int select_loop(void)
+static int select_loop(void)
 {
 	int ret;
 	struct timeval tv = {.tv_sec = 0, .tv_usec = 0};
@@ -793,7 +794,7 @@ out:
 	return ret;
 }
 
-int com_run(void)
+static int com_run(void)
 {
 	int ret;
 
@@ -808,7 +809,7 @@ int com_run(void)
 	return select_loop();
 }
 
-int com_prune(void)
+static int com_prune(void)
 {
 	int ret;
 	struct snapshot_list sl;
@@ -847,7 +848,7 @@ out:
 	return ret;
 }
 
-int com_create(void)
+static int com_create(void)
 {
 	int ret, status;
 	char **rsync_argv;
@@ -896,7 +897,7 @@ out:
 	return ret;
 }
 
-int com_ls(void)
+static int com_ls(void)
 {
 	int i;
 	struct snapshot_list sl;
