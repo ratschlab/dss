@@ -29,11 +29,12 @@
 #include "time.h"
 #include "snap.h"
 
-
+/** Command line and config file options. */
 static struct gengetopt_args_info conf;
+/** Non-NULL if we log to a file. */
 static FILE *logfile;
+/** The read end of the signal pipe */
 static int signal_pipe;
-
 /** Process id of current rsync process. */
 static pid_t rsync_pid;
 /** Whether the rsync process is currently stopped */
@@ -46,11 +47,11 @@ static struct timeval next_snapshot_time;
 static pid_t pre_create_hook_pid;
 /** The pid of the post-create hook. */
 static pid_t post_create_hook_pid;
-/* Creation time of the snapshot currently being created. */
+/** Creation time of the snapshot currently being created. */
 static int64_t current_snapshot_creation_time;
-
+/** Needed by the post-create hook. */
 static char *path_to_last_complete_snapshot;
-
+/** \sa \ref snap.h for details. */
 static unsigned snapshot_creation_status;
 
 
@@ -76,6 +77,14 @@ static int call_command_handler(void)
 #undef COMMAND
 #undef COMMANDS
 
+/**
+ * The log function of dss.
+ *
+ * \param ll Loglevel.
+ * \param fml Usual format string.
+ *
+ * All DSS_XXX_LOG() macros use this function.
+ */
 __printf_2_3 void dss_log(int ll, const char* fmt,...)
 {
 	va_list argp;
@@ -543,7 +552,6 @@ static int handle_sigchld(void)
 	exit(EXIT_FAILURE);
 }
 
-
 static int check_config(void)
 {
 	if (conf.unit_interval_arg <= 0) {
@@ -931,7 +939,12 @@ err:
 	exit(EXIT_FAILURE);
 }
 
-
+/**
+ * The main function of dss.
+ *
+ * \param argc Usual argument count.
+ * \param argv Usual argument vector.
+ */
 int main(int argc, char **argv)
 {
 	int ret;

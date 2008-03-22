@@ -1,3 +1,5 @@
+
+/** The state of snapshot creation. */
 enum {
 	/** We are ready to take the next snapshot. */
 	SCS_READY,
@@ -9,15 +11,20 @@ enum {
 	SCS_RSYNC_RUNNING,
 	/** The rsync process exited successfully. */
 	SCS_RSYNC_SUCCESS,
-	/** The post-create hook has been started- */
+	/** The post-create hook has been started. */
 	SCS_POST_HOOK_RUNNING,
 };
 
-/*
- * complete, not being deleted: 1204565370-1204565371.Sun_Mar_02_2008_14_33-Sun_Mar_02_2008_14_43
- * complete, being deleted: 1204565370-1204565371.being_deleted
- * incomplete, not being deleted: 1204565370-incomplete
- * incomplete, being deleted: 1204565370-incomplete.being_deleted
+/**
+ * The status of a snapshot.
+ *
+ * The snapshot directories come in four different flavours, depending
+ * on how the two staus flags are set. Examples:
+ *
+ * Complete, not being deleted: 1204565370-1204565371.Sun_Mar_02_2008_14_33-Sun_Mar_02_2008_14_43.
+ * Complete, being deleted: 1204565370-1204565371.being_deleted.
+ * Incomplete, not being deleted: 1204565370-incomplete.
+ * incomplete, being deleted: 1204565370-incomplete.being_deleted.
  */
 enum snapshot_status_flags {
 	/** The rsync process terminated successfully. */
@@ -26,11 +33,20 @@ enum snapshot_status_flags {
 	SS_BEING_DELETED = 2,
 };
 
+/** Desribes one snapshot */
 struct snapshot {
+	/** The name of the directory, relative to the destination dir. */
 	char *name;
+	/** Seconds after the epoch when this snapshot was created. */
 	int64_t creation_time;
+	/**
+	 * Seconds after the epoch when creation of this snapshot completed.
+	 * Only meaningful if the SS_COMPLTE bit is set.
+	 */
 	int64_t completion_time;
+	/** See \ref snapshot_status_flags. */
 	enum snapshot_status_flags flags;
+	/** The interval this snapshot belongs to. */
 	unsigned interval;
 };
 
@@ -48,9 +64,11 @@ struct snapshot_list {
 	unsigned *interval_count;
 };
 
+/** Iterate over all snapshots in a snapshot list. */
 #define FOR_EACH_SNAPSHOT(s, i, sl) \
 	for ((i) = 0; (i) < (sl)->num_snapshots && ((s) = (sl)->snapshots[(i)]); (i)++)
 
+/** Iterate backwards over all snapshots in a snapshot list. */
 #define FOR_EACH_SNAPSHOT_REVERSE(s, i, sl) \
 	for ((i) = (sl)->num_snapshots; (i) > 0 && ((s) = (sl)->snapshots[(i - 1)]); (i)--)
 
@@ -64,7 +82,10 @@ __malloc char *being_deleted_name(struct snapshot *s);
 int complete_name(int64_t start, int64_t end, char **result);
 __malloc char *name_of_newest_complete_snapshot(struct snapshot_list *sl);
 
-static inline struct snapshot *get_oldest_snapshot(struct snapshot_list *sl)
+/**
+ * Get the oldest snapshot in a snapshot list.
+ */
+_static_inline_ struct snapshot *get_oldest_snapshot(struct snapshot_list *sl)
 {
 	if (!sl->num_snapshots)
 		return NULL;
