@@ -113,19 +113,6 @@ struct snapshot {
 	unsigned interval;
 };
 
-/*
- * An edge snapshot is either the oldest one or the newest one.
- *
- * We need to find either of them occasionally: The create code
- * needs to know the newest snapshot because that is the one
- * used as the link destination dir. The pruning code needs to
- * find the oldest one in case disk space becomes low.
- */
-struct edge_snapshot_data {
-	int64_t now;
-	struct snapshot snap;
-};
-
 __printf_2_3 void dss_log(int ll, const char* fmt,...)
 {
 	va_list argp;
@@ -299,6 +286,16 @@ struct snapshot_list {
 
 #define FOR_EACH_SNAPSHOT(s, i, sl) \
 	for ((i) = 0; (i) < (sl)->num_snapshots && ((s) = (sl)->snapshots[(i)]); (i)++)
+
+#define FOR_EACH_SNAPSHOT_REVERSE(s, i, sl) \
+	for ((i) = (sl)->num_snapshots; (i) > 0 && ((s) = (sl)->snapshots[(i - 1)]); (i)--)
+
+static inline struct snapshot *oldest_snapshot(struct snapshot_list *sl)
+{
+	if (!sl->num_snapshots)
+		return NULL;
+	return sl->snapshots[0];
+}
 
 #define NUM_COMPARE(x, y) ((int)((x) < (y)) - (int)((x) > (y)))
 
@@ -734,31 +731,23 @@ out:
 	return ret;
 }
 
-int get_newest_complete(const char *dirname, void *private)
-{
-	struct edge_snapshot_data *esd = private;
-	struct snapshot s;
-	int ret = is_snapshot(dirname, esd->now, &s);
-
-	if (ret <= 0)
-		return 1;
-	if (s.flags != SS_COMPLETE) /* incomplete or being deleted */
-		return 1;
-	if (s.creation_time < esd->snap.creation_time)
-		return 1;
-	free(esd->snap.name);
-	esd->snap = s;
-	return 1;
-}
-
 __malloc char *name_of_newest_complete_snapshot(void)
 {
-	struct edge_snapshot_data esd = {
-		.now = get_current_time(),
-		.snap = {.creation_time = -1}
-	};
-	for_each_subdir(get_newest_complete, &esd);
-	return esd.snap.name;
+	struct snapshot_list sl;
+	struct snapshot *s;
+	int i;
+	char *name = NULL;
+
+	get_snapshot_list(&sl);
+
+	FOR_EACH_SNAPSHOT_REVERSE(s, i, &sl) {
+		if (s->flags != SS_COMPLETE) /* incomplete or being deleted */
+			continue;
+		name = dss_strdup(s->name);
+		break;
+	}
+	free_snapshot_list(&sl);
+	return name;
 }
 
 void create_rsync_argv(char ***argv, int64_t *num)
@@ -932,39 +921,16 @@ out:
 		DSS_ERROR_LOG("%s\n", dss_strerror(-ret));
 }
 
-int get_oldest(const char *dirname, void *private)
+int remove_oldest_snapshot(struct snapshot_list *sl)
 {
-	struct edge_snapshot_data *esd = private;
-	struct snapshot s;
-	int ret = is_snapshot(dirname, esd->now, &s);
+	struct snapshot *s = oldest_snapshot(sl);
 
-	if (ret <= 0)
-		return 1;
-	if (s.creation_time > esd->snap.creation_time)
-		return 1;
-	free(esd->snap.name);
-	esd->snap = s;
-	return 1;
-}
-
-int remove_oldest_snapshot()
-{
-	int ret;
-	struct edge_snapshot_data esd = {
-		.now = get_current_time(),
-		.snap = {.creation_time = LLONG_MAX}
-	};
-	for_each_subdir(get_oldest, &esd);
-	if (!esd.snap.name) /* no snapshot found */
+	if (!s) /* no snapshot found */
 		return 0;
-	DSS_INFO_LOG("oldest snapshot: %s\n", esd.snap.name);
-	ret = 0;
-	if (esd.snap.creation_time == current_snapshot_creation_time)
-		goto out; /* do not remove the snapshot currently being created */
-	ret = remove_snapshot(&esd.snap);
-out:
-	free(esd.snap.name);
-	return ret;
+	DSS_INFO_LOG("oldest snapshot: %s\n", s->name);
+	if (s->creation_time == current_snapshot_creation_time)
+		return 0; /* do not remove the snapshot currently being created */
+	return remove_snapshot(s);
 }
 
 /* TODO: Also consider number of inodes. */
@@ -1001,7 +967,7 @@ int try_to_free_disk_space(int low_disk_space)
 	if (!low_disk_space)
 		goto out;
 	DSS_WARNING_LOG("disk space low and nothing obvious to remove\n");
-	ret = remove_oldest_snapshot();
+	ret = remove_oldest_snapshot(&sl);
 	if (ret)
 		goto out;
 	DSS_CRIT_LOG("uhuhu: not enough disk space for a single snapshot\n");
