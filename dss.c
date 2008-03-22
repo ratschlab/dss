@@ -1062,13 +1062,6 @@ int com_run(void)
 	return select_loop();
 }
 
-void log_disk_space(struct disk_space *ds)
-{
-	DSS_INFO_LOG("free: %uM/%uM (%u%%), %u%% inodes unused\n",
-		ds->free_mb, ds->total_mb, ds->percent_free,
-		ds->percent_free_inodes);
-}
-
 int com_prune(void)
 {
 	int ret;

@@ -6,4 +6,5 @@ struct disk_space {
 };
 
 int get_disk_space(const char *path, struct disk_space *result);
+void log_disk_space(struct disk_space *ds);
 

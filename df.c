@@ -6,6 +6,7 @@
 #include <errno.h>
 
 #include "gcc-compat.h"
+#include "log.h"
 #include "error.h"
 #include "string.h"
 #include "df.h"
@@ -32,4 +33,11 @@ int get_disk_space(const char *path, struct disk_space *result)
 	result->percent_free = 100.0 * available_blocks / total_blocks + 0.5;
 	result->percent_free_inodes = 100.0 * available_inodes / total_inodes + 0.5;
 	return 1;
+}
+
+void log_disk_space(struct disk_space *ds)
+{
+	DSS_INFO_LOG("free: %uM/%uM (%u%%), %u%% inodes unused\n",
+		ds->free_mb, ds->total_mb, ds->percent_free,
+		ds->percent_free_inodes);
 }
