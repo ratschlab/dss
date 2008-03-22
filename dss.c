@@ -30,7 +30,6 @@
 
 
 struct gengetopt_args_info conf;
-char *dss_error_txt = NULL;
 static FILE *logfile;
 static int signal_pipe;
 
@@ -180,10 +179,8 @@ int is_snapshot(const char *dirname, int64_t now, struct snapshot *s)
 	tmp[i] = '\0';
 	ret = dss_atoi64(tmp, &num);
 	free(tmp);
-	if (ret < 0) {
-		free(dss_error_txt);
+	if (ret < 0)
 		return 0;
-	}
 	assert(num >= 0);
 	if (num > now)
 		return 0;
@@ -212,10 +209,8 @@ int is_snapshot(const char *dirname, int64_t now, struct snapshot *s)
 	tmp[i] = '\0';
 	ret = dss_atoi64(tmp, &num);
 	free(tmp);
-	if (ret < 0) {
-		free(dss_error_txt);
+	if (ret < 0)
 		return 0;
-	}
 	if (num > now)
 		return 0;
 	s->completion_time = num;
