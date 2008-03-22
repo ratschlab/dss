@@ -278,15 +278,15 @@ int typestr="megabytes"
 default="100"
 optional
 details="
-	If less than this many megabytes of space is available on
-	the file system containing the destination directory, \"dss
-	--run\" will suspend the currently running rsync process and will
-	start to remove snapshots, starting from the oldest snapshot,
-	until the free disk space exceeds this value.  See also the
-	--min_free_percent option.
+	If disk space on the file system containing the destination
+	directory gets low, \"dss --run\" will suspend the currently
+	running rsync process and will start to remove snapshots in
+	order to free disk space. This option specifies the minimal
+	amount of free disk space. If less than the given number of
+	megabytes is available, snapshots are being deleted. See also
+	the --min_free_percent and the min-free-percent-inodes options.
 
 	A value of zero deactivates this check.
-
 "
 
 option "min-free-percent" p
@@ -296,7 +296,21 @@ int typestr="percent"
 default="2"
 optional
 details="
-	See --min-free-mb.  Note that it is not recommended to set both
+	See --min-free-mb. Note that it is not recommended to set both
 	--min-free-mb and --min-free-percent to zero as this will
 	cause your file system to fill up quickly.
+"
+option "min-free-percent-inodes" i
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"Minimal percent of free inodes"
+int typestr="percent"
+default="2"
+optional
+details="
+	Specify the minimum amount of free inodes on the file system
+	containing the destination dir. If less than that many inodes
+	are free, snatshot removal kicks in just as in case of low
+	disk space.
+
+	A value of zero deactivates this check.
 "

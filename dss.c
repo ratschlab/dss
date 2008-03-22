@@ -133,6 +133,9 @@ static int disk_space_low(void)
 	if (conf.min_free_percent_arg)
 		if (ds.percent_free < conf.min_free_percent_arg)
 			return 1;
+	if (conf.min_free_percent_inodes_arg)
+		if (ds.percent_free_inodes < conf.min_free_percent_inodes_arg)
+			return 1;
 	return 0;
 }
 
