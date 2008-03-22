@@ -13,13 +13,9 @@ __must_check int mark_fd_nonblocking(int fd);
  */
 _static_inline_ int dss_rename(const char *old_path, const char *new_path)
 {
-	int ret;
-
 	if (rename(old_path, new_path) >= 0)
 		return 1;
-	ret = -ERRNO_TO_DSS_ERROR(errno);
-	make_err_msg("rename %s -> %s failed", old_path, new_path);
-	return ret;
+	return -ERRNO_TO_DSS_ERROR(errno);
 }
 
 int dss_select(int n, fd_set *readfds, fd_set *writefds,

@@ -15,8 +15,6 @@
 #include "error.h"
 #include "string.h"
 
-__noreturn void clean_exit(int status);
-
 /**
  * Write a message to a dynamically allocated string.
  *
@@ -71,7 +69,7 @@ __must_check __malloc void *dss_realloc(void *p, size_t size)
 	if (!(p = realloc(p, size))) {
 		DSS_EMERG_LOG("realloc failed (size = %zu), aborting\n",
 			size);
-		clean_exit(EXIT_FAILURE);
+		exit(EXIT_FAILURE);
 	}
 	return p;
 }
@@ -96,7 +94,7 @@ __must_check __malloc void *dss_malloc(size_t size)
 	if (!p) {
 		DSS_EMERG_LOG("malloc failed (size = %zu),  aborting\n",
 			size);
-		clean_exit(EXIT_FAILURE);
+		exit(EXIT_FAILURE);
 	}
 	return p;
 }
@@ -142,7 +140,7 @@ __must_check __malloc char *dss_strdup(const char *s)
 	if ((ret = strdup(s? s: "")))
 		return ret;
 	DSS_EMERG_LOG("strdup failed, aborting\n");
-	clean_exit(EXIT_FAILURE);
+	exit(EXIT_FAILURE);
 }
 
 /**
@@ -164,12 +162,6 @@ __must_check __printf_1_2 __malloc char *make_message(const char *fmt, ...)
 
 	VSPRINTF(fmt, msg);
 	return msg;
-}
-
-__printf_1_2 void make_err_msg(const char* fmt,...)
-{
-	free(dss_error_txt);
-	VSPRINTF(fmt, dss_error_txt);
 }
 
 /**
@@ -201,22 +193,14 @@ int dss_atoi64(const char *str, int64_t *value)
 
 	errno = 0; /* To distinguish success/failure after call */
 	tmp = strtoll(str, &endptr, 10);
-	if (errno == ERANGE && (tmp == LLONG_MAX || tmp == LLONG_MIN)) {
-		make_err_msg("%s", str);
+	if (errno == ERANGE && (tmp == LLONG_MAX || tmp == LLONG_MIN))
 		return -E_ATOI_OVERFLOW;
-	}
-	if (errno != 0 && tmp == 0) { /* other error */
-		make_err_msg("%s", str);
+	if (errno != 0 && tmp == 0) /* other error */
 		return -E_STRTOLL;
-	}
-	if (endptr == str) {
-		make_err_msg("%s", str);
+	if (endptr == str)
 		return -E_ATOI_NO_DIGITS;
-	}
-	if (*endptr != '\0') { /* Further characters after number */
-		make_err_msg("%s", str);
+	if (*endptr != '\0') /* Further characters after number */
 		return -E_ATOI_JUNK_AT_END;
-	}
 	*value = tmp;
 	return 1;
 }

@@ -11,6 +11,7 @@
 
 
 #include "gcc-compat.h"
+#include "log.h"
 #include "error.h"
 #include "string.h"
 
@@ -96,7 +97,7 @@ int dss_exec(pid_t *pid, const char *file, char *const *const args, int *fds)
 		close(null);
 	return 1;
 err_out:
-	make_err_msg("failed to exec %s", file);
+	DSS_ERROR_LOG("failed to exec %s\n", file);
 	if (err[0] >= 0)
 		close(err[0]);
 	if (err[1] >= 0)

@@ -46,11 +46,6 @@ static inline char *dss_strerror(int num)
 		return dss_errlist[num];
 }
 
-static inline void log_err_msg(int loglevel, int num)
-{
-	dss_log(loglevel, "%s (%s)\n", dss_error_txt, dss_strerror(num));
-}
-
 #define DSS_ERRORS \
 	DSS_ERROR(SUCCESS, "success") \
 	DSS_ERROR(SYNTAX, "syntax error") \

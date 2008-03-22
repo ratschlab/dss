@@ -270,22 +270,14 @@ int complete_name(int64_t start, int64_t end, char **result)
 	time_t *end_seconds = (time_t *) (uint64_t *)&end; /* STFU, gcc */
 	char start_str[200], end_str[200];
 
-	if (!localtime_r(start_seconds, &start_tm)) {
-		make_err_msg("%lli", (long long)start);
+	if (!localtime_r(start_seconds, &start_tm))
 		return -E_LOCALTIME;
-	}
-	if (!localtime_r(end_seconds, &end_tm)) {
-		make_err_msg("%lli", (long long)end);
+	if (!localtime_r(end_seconds, &end_tm))
 		return -E_LOCALTIME;
-	}
-	if (!strftime(start_str, sizeof(start_str), "%a_%b_%d_%Y_%H_%M_%S", &start_tm)) {
-		make_err_msg("%lli", (long long)start);
+	if (!strftime(start_str, sizeof(start_str), "%a_%b_%d_%Y_%H_%M_%S", &start_tm))
 		return -E_STRFTIME;
-	}
-	if (!strftime(end_str, sizeof(end_str), "%a_%b_%d_%Y_%H_%M_%S", &end_tm)) {
-		make_err_msg("%lli", (long long)end);
+	if (!strftime(end_str, sizeof(end_str), "%a_%b_%d_%Y_%H_%M_%S", &end_tm))
 		return -E_STRFTIME;
-	}
 	*result = make_message("%lli-%lli.%s-%s", (long long) start, (long long) end,
 		start_str, end_str);
 	return 1;
@@ -429,7 +421,7 @@ int wait_for_process(pid_t pid, int *status)
 		kill(pid, SIGTERM);
 	}
 	if (ret < 0)
-		make_err_msg("failed to wait for process %d", (int)pid);
+		DSS_ERROR_LOG("failed to wait for process %d\n", (int)pid);
 	else
 		log_termination_msg(pid, *status);
 	return ret;
@@ -539,23 +531,12 @@ int remove_outdated_snapshot(struct snapshot_list *sl)
 
 int handle_rm_exit(int status)
 {
-	int es, ret;
-
-	if (!WIFEXITED(status)) {
-		make_err_msg("rm process %d died involuntary", (int)rm_pid);
-		ret = -E_INVOLUNTARY_EXIT;
-		goto out;
-	}
-	es = WEXITSTATUS(status);
-	if (es) {
-		make_err_msg("rm process %d returned %d", (int)rm_pid, es);
-		ret = -E_BAD_EXIT_CODE;
-		goto out;
-	}
-	ret = 1;
 	rm_pid = 0;
-out:
-	return ret;
+	if (!WIFEXITED(status))
+		return -E_INVOLUNTARY_EXIT;
+	if (WEXITSTATUS(status))
+		return -E_BAD_EXIT_CODE;
+	return 1;
 }
 
 int wait_for_rm_process(void)
@@ -578,12 +559,12 @@ void kill_process(pid_t pid)
 int check_config(void)
 {
 	if (conf.unit_interval_arg <= 0) {
-		make_err_msg("bad unit interval: %i", conf.unit_interval_arg);
+		DSS_ERROR_LOG("bad unit interval: %i\n", conf.unit_interval_arg);
 		return -E_INVALID_NUMBER;
 	}
 	DSS_DEBUG_LOG("unit interval: %i day(s)\n", conf.unit_interval_arg);
 	if (conf.num_intervals_arg <= 0) {
-		make_err_msg("bad number of intervals  %i", conf.num_intervals_arg);
+		DSS_ERROR_LOG("bad number of intervals  %i\n", conf.num_intervals_arg);
 		return -E_INVALID_NUMBER;
 	}
 	DSS_DEBUG_LOG("number of intervals: %i\n", conf.num_intervals_arg);
@@ -615,7 +596,7 @@ void parse_config_file(int override)
 	ret = stat(config_file, &statbuf);
 	if (ret && conf.config_file_given) {
 		ret = -ERRNO_TO_DSS_ERROR(errno);
-		make_err_msg("failed to stat config file %s", config_file);
+		DSS_ERROR_LOG("failed to stat config file %s\n", config_file);
 		goto out;
 	}
 	if (!ret) {
@@ -653,7 +634,7 @@ out:
 	free(config_file);
 	if (ret >= 0)
 		return;
-	log_err_msg(EMERG, -ret);
+	DSS_EMERG_LOG("%s\n", dss_strerror(-ret));
 	exit(EXIT_FAILURE);
 }
 
@@ -729,7 +710,7 @@ int handle_rsync_exit(int status)
 	int es, ret;
 
 	if (!WIFEXITED(status)) {
-		make_err_msg("rsync process %d died involuntary", (int)rsync_pid);
+		DSS_ERROR_LOG("rsync process %d died involuntary\n", (int)rsync_pid);
 		ret = -E_INVOLUNTARY_EXIT;
 		snapshot_creation_status = SCS_READY;
 		compute_next_snapshot_time();
@@ -737,7 +718,7 @@ int handle_rsync_exit(int status)
 	}
 	es = WEXITSTATUS(status);
 	if (es != 0 && es != 23 && es != 24) {
-		make_err_msg("rsync process %d returned %d", (int)rsync_pid, es);
+		DSS_ERROR_LOG("rsync process %d returned %d\n", (int)rsync_pid, es);
 		ret = -E_BAD_EXIT_CODE;
 		snapshot_creation_status = SCS_READY;
 		compute_next_snapshot_time();
@@ -883,8 +864,6 @@ int handle_pre_create_hook_exit(int status)
 	int es, ret;
 
 	if (!WIFEXITED(status)) {
-		make_err_msg("pre-create-hook %d died involuntary",
-			(int)pre_create_hook_pid);
 		snapshot_creation_status = SCS_READY;
 		compute_next_snapshot_time();
 		ret = -E_INVOLUNTARY_EXIT;
@@ -892,8 +871,6 @@ int handle_pre_create_hook_exit(int status)
 	}
 	es = WEXITSTATUS(status);
 	if (es) {
-		make_err_msg("pre-create-hook %d returned %d",
-			(int)pre_create_hook_pid, es);
 		snapshot_creation_status = SCS_READY;
 		compute_next_snapshot_time();
 		ret = -E_BAD_EXIT_CODE;
@@ -952,7 +929,7 @@ void handle_signal(void)
 	}
 out:
 	if (ret < 0)
-		log_err_msg(ERROR, -ret);
+		DSS_ERROR_LOG("%s\n", dss_strerror(-ret));
 }
 
 int get_oldest(const char *dirname, void *private)
@@ -1027,7 +1004,7 @@ int try_to_free_disk_space(int low_disk_space)
 	ret = remove_oldest_snapshot();
 	if (ret)
 		goto out;
-	make_err_msg("uhuhu: not enough disk space for a single snapshot");
+	DSS_CRIT_LOG("uhuhu: not enough disk space for a single snapshot\n");
 	ret= -ENOSPC;
 out:
 	free_snapshot_list(&sl);
@@ -1109,7 +1086,7 @@ int com_run(void)
 	int ret;
 
 	if (conf.dry_run_given) {
-		make_err_msg("dry_run not supported by this command");
+		DSS_ERROR_LOG("dry_run not supported by this command\n");
 		return -E_SYNTAX;
 	}
 	ret = install_sighandler(SIGHUP);
@@ -1226,11 +1203,6 @@ int com_ls(void)
 	return 1;
 }
 
-__noreturn void clean_exit(int status)
-{
-	free(dss_error_txt);
-	exit(status);
-}
 static void setup_signal_handling(void)
 {
 	int ret;
@@ -1270,6 +1242,6 @@ int main(int argc, char **argv)
 	setup_signal_handling();
 	ret = call_command_handler();
 	if (ret < 0)
-		log_err_msg(EMERG, -ret);
-	clean_exit(ret >= 0? EXIT_SUCCESS : EXIT_FAILURE);
+		DSS_EMERG_LOG("%s\n", dss_strerror(-ret));
+	exit(ret >= 0? EXIT_SUCCESS : EXIT_FAILURE);
 }

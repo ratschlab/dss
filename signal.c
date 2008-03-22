@@ -120,7 +120,6 @@ int install_sighandler(int sig)
 	DSS_DEBUG_LOG("catching signal %d\n", sig);
 	if (signal(sig, &generic_signal_handler) != SIG_ERR)
 		return 1;
-	make_err_msg("signal %d", sig);
 	return -E_SIGNAL_SIG_ERR;
 }
 
@@ -147,7 +146,7 @@ int next_signal(void)
 	assert(r < 0);
 	if (err == EAGAIN)
 		return 0;
-	make_err_msg("failed to read from signal pipe");
+	DSS_ERROR_LOG("failed to read from signal pipe\n");
 	return -ERRNO_TO_DSS_ERROR(err);
 }
 

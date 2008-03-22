@@ -35,11 +35,8 @@ int for_each_subdir(int (*func)(const char *, void *), void *private_data)
 	int ret;
 	DIR *dir = opendir(".");
 
-	if (!dir) {
-		ret = -ERRNO_TO_DSS_ERROR(errno);
-		make_err_msg("opendir(\".\") failed");
-		return ret;
-	}
+	if (!dir)
+		return -ERRNO_TO_DSS_ERROR(errno);
 	while ((entry = readdir(dir))) {
 		mode_t m;
 		struct stat s;
@@ -51,7 +48,6 @@ int for_each_subdir(int (*func)(const char *, void *), void *private_data)
 		ret = lstat(entry->d_name, &s) == -1;
 		if (ret == -1) {
 			ret = -ERRNO_TO_DSS_ERROR(errno);
-			make_err_msg("lstat(\"%s\") failed", entry->d_name);
 			goto out;
 		}
 		m = s.st_mode;
@@ -75,13 +71,9 @@ out:
  */
 int dss_chdir(const char *path)
 {
-	int ret = chdir(path);
-
-	if (ret >= 0)
+	if (chdir(path) >= 0)
 		return 1;
-	ret = -ERRNO_TO_DSS_ERROR(errno);
-	make_err_msg("chdir to %s failed", path);
-	return ret;
+	return -ERRNO_TO_DSS_ERROR(errno);
 }
 
 /**
