@@ -1,6 +1,6 @@
 #
 package "dss"
-version "0.0.3"
+version "0.0.4"
 purpose "the dyadic snapshot scheduler
 
 dss creates hardlink-based snapshots of a given directory on a remote
