@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
 #include <limits.h>
@@ -9,7 +10,6 @@
 #include <unistd.h>
 
 
-#include "cmdline.h"
 #include "gcc-compat.h"
 #include "log.h"
 #include "error.h"
