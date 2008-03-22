@@ -6,3 +6,4 @@ void tv_scale(const unsigned long, const struct timeval *, struct timeval *);
 void tv_divide(const unsigned long divisor, const struct timeval *tv,
 	struct timeval *result);
 void ms2tv(const long unsigned n, struct timeval *tv);
+int64_t get_current_time(void);

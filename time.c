@@ -1,6 +1,13 @@
 #include <sys/time.h>
 #include <time.h>
 #include <inttypes.h>
+#include <assert.h>
+#include <string.h>
+
+#include "gcc-compat.h"
+#include "error.h"
+#include "string.h"
+#include "log.h"
 
 /*
  * Copyright (C) 2005-2008 Andre Noll <maan@systemlinux.org>
@@ -128,4 +135,12 @@ void tv_divide(const unsigned long divisor, const struct timeval *tv,
 
 	result->tv_sec = x / 1000 / 1000;
 	result->tv_usec = x % (1000 * 1000);
+}
+
+int64_t get_current_time(void)
+{
+	time_t now;
+	time(&now);
+	DSS_DEBUG_LOG("now: %lli\n", (long long) now);
+	return (int64_t)now;
 }
