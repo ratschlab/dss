@@ -42,8 +42,9 @@ static int rsync_stopped;
 static pid_t rm_pid;
 /** When the next snapshot is due. */
 struct timeval next_snapshot_time;
-
+/** The pid of the pre-create hook. */
 pid_t pre_create_hook_pid;
+/** The pid of the post-create hook. */
 pid_t post_create_hook_pid;
 
 /* Creation time of the snapshot currently being created. */
@@ -52,11 +53,17 @@ int64_t current_snapshot_creation_time;
 static char *path_to_last_complete_snapshot;
 
 enum {
+	/** We are ready to take the next snapshot. */
 	SCS_READY,
+	/** The pre-creation hook has been started. */
 	SCS_PRE_HOOK_RUNNING,
+	/** The pre-creation hook exited successfully. */
 	SCS_PRE_HOOK_SUCCESS,
+	/** The rsync process is running. */
 	SCS_RSYNC_RUNNING,
+	/** The rsync process exited successfully. */
 	SCS_RSYNC_SUCCESS,
+	/** The post-create hook has been started- */
 	SCS_POST_HOOK_RUNNING,
 };
 
@@ -300,8 +307,6 @@ struct snapshot_list {
 
 #define FOR_EACH_SNAPSHOT(s, i, sl) \
 	for ((i) = 0; (i) < (sl)->num_snapshots && ((s) = (sl)->snapshots[(i)]); (i)++)
-
-
 
 #define NUM_COMPARE(x, y) ((int)((x) < (y)) - (int)((x) > (y)))
 
