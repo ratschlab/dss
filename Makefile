@@ -20,7 +20,7 @@ Makefile.deps: $(wildcard *.c *.h)
 -include Makefile.deps
 
 dss: $(dss_objects)
-	$(CC) $(CPPFLAGS) $(DEBUG_CPPFLAGS) -o $@ $(dss_objects)
+	$(CC) -o $@ $(dss_objects)
 
 %.o: %.c cmdline.h
 	$(CC) -c $(CPPFLAGS) $(DEBUG_CPPFLAGS) $<
