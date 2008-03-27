@@ -1,9 +1,6 @@
-# define inline		inline __attribute__ ((always_inline))
 # define __noreturn	__attribute__ ((noreturn))
 # define __malloc	__attribute__ ((malloc))
 # define __a_unused	__attribute__ ((unused))
-# define likely(x)	__builtin_expect (!!(x), 1)
-# define unlikely(x)	__builtin_expect (!!(x), 0)
 /* 
  * p is the number of the "format string" parameter, and q is 
  * the number of the first variadic parameter 
