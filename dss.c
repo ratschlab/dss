@@ -603,7 +603,8 @@ static void parse_config_file(int override)
 			.override = override,
 			.initialize = 0,
 			.check_required = 1,
-			.check_ambiguity = 0
+			.check_ambiguity = 0,
+			.print_errors = 1
 		};
 		cmdline_parser_config_file(config_file, &conf, &params);
 	}
@@ -955,7 +956,8 @@ int main(int argc, char **argv)
 		.override = 0,
 		.initialize = 1,
 		.check_required = 0,
-		.check_ambiguity = 0
+		.check_ambiguity = 0,
+		.print_errors = 1
 	};
 
 	cmdline_parser_ext(argc, argv, &conf, &params); /* aborts on errors */
