@@ -629,9 +629,20 @@ static void parse_config_file(int override)
 	}
 	DSS_EMERG_LOG("loglevel: %d\n", conf.loglevel_arg);
 //	cmdline_parser_dump(logfile? logfile : stdout, &conf);
-	ret = dss_chdir(conf.dest_dir_arg);
 out:
 	free(config_file);
+	if (ret >= 0)
+		return;
+	DSS_EMERG_LOG("%s\n", dss_strerror(-ret));
+	exit(EXIT_FAILURE);
+}
+
+static void change_to_dest_dir(void)
+{
+	int ret;
+
+	DSS_INFO_LOG("changing cwd to %s\n", conf.dest_dir_arg);
+	ret = dss_chdir(conf.dest_dir_arg);
 	if (ret >= 0)
 		return;
 	DSS_EMERG_LOG("%s\n", dss_strerror(-ret));
@@ -642,6 +653,7 @@ static void handle_sighup(void)
 {
 	DSS_NOTICE_LOG("SIGHUP\n");
 	parse_config_file(1);
+	change_to_dest_dir();
 }
 
 static void handle_signal(void)
@@ -965,6 +977,7 @@ int main(int argc, char **argv)
 
 	if (conf.daemon_given)
 		daemon_init();
+	change_to_dest_dir();
 	setup_signal_handling();
 	ret = call_command_handler();
 	if (ret < 0)
