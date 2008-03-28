@@ -304,7 +304,7 @@ option "min-free-percent-inodes" i
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 "Minimal percent of free inodes"
 int typestr="percent"
-default="2"
+default="0"
 optional
 details="
 	Specify the minimum amount of free inodes on the file system
@@ -312,5 +312,10 @@ details="
 	are free, snatshot removal kicks in just as in case of low
 	disk space.
 
-	A value of zero deactivates this check.
+	Note that not every file system supports the concept of inodes.
+	Moreover it is not possible to reliably detect whether this is
+	the case. Therefore this feature is disabled by default. It's
+	safe to enable it for ext3 file systems on linux though.
+
+	A value of zero (the default) deactivates this check.
 "
