@@ -705,11 +705,6 @@ static void create_rsync_argv(char ***argv, int64_t *num)
 		free(newest);
 	} else
 		DSS_INFO_LOG("no previous snapshot found\n");
-	if (conf.exclude_patterns_given) {
-		(*argv)[i++] = dss_strdup("--exclude-from");
-		(*argv)[i++] = dss_strdup(conf.exclude_patterns_arg);
-
-	}
 	logname = dss_logname();
 	if (conf.remote_user_given && !strcmp(conf.remote_user_arg, logname))
 		(*argv)[i++] = dss_strdup(conf.source_dir_arg);

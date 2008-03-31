@@ -188,12 +188,6 @@ details="
 	to that option are passed verbatim to the rsync command.
 "
 
-option "exclude-patterns" e
-#~~~~~~~~~~~~~~~~~~~~~~~~~~
-"Rsync exclude patterns"
-string typestr="path"
-optional
-
 ###################
 section "Intervals"
 ###################
