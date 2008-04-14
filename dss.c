@@ -746,7 +746,8 @@ static int create_snapshot(char **argv)
 static int select_loop(void)
 {
 	int ret;
-	struct timeval tv = {.tv_sec = 0, .tv_usec = 0};
+	/* check every 60 seconds for free disk space */
+	struct timeval tv = {.tv_sec = 60, .tv_usec = 0};
 
 	for (;;) {
 		fd_set rfds;
@@ -754,9 +755,7 @@ static int select_loop(void)
 		char **rsync_argv;
 		struct timeval now, *tvp = &tv;
 
-		if (rsync_pid)
-			tv.tv_sec = 60; /* check every 60 seconds for free disk space */
-		else if (rm_pid)
+		if (rm_pid)
 			tvp = NULL; /* sleep until rm process dies */
 		FD_ZERO(&rfds);
 		FD_SET(signal_pipe, &rfds);
@@ -781,7 +780,7 @@ static int select_loop(void)
 		}
 		restart_rsync_process();
 		gettimeofday(&now, NULL);
-		if (tv_diff(&next_snapshot_time, &now, &tv) > 0)
+		if (tv_diff(&next_snapshot_time, &now, NULL) > 0)
 			continue;
 		switch (snapshot_creation_status) {
 		case SCS_READY:
