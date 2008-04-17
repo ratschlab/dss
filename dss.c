@@ -747,19 +747,24 @@ static int select_loop(void)
 {
 	int ret;
 	/* check every 60 seconds for free disk space */
-	struct timeval tv = {.tv_sec = 60, .tv_usec = 0};
+	struct timeval tv;
 
 	for (;;) {
 		fd_set rfds;
 		int low_disk_space;
 		char **rsync_argv;
-		struct timeval now, *tvp = &tv;
+		struct timeval now, *tvp;
 
 		if (rm_pid)
 			tvp = NULL; /* sleep until rm process dies */
+		else { /* sleep one minute */
+			tv.tv_sec = 60;
+			tv.tv_usec = 0;
+			tvp = &tv;
+		}
 		FD_ZERO(&rfds);
 		FD_SET(signal_pipe, &rfds);
-		DSS_DEBUG_LOG("tvp: %p, tv_sec: %lu\n", tvp, (long unsigned) tv.tv_sec);
+		DSS_DEBUG_LOG("tvp: %p, tv_sec : %lu\n", tvp, (long unsigned) tv.tv_sec);
 		ret = dss_select(signal_pipe + 1, &rfds, NULL, tvp);
 		if (ret < 0)
 			return ret;
