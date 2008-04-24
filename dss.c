@@ -214,7 +214,7 @@ static int remove_redundant_snapshot(struct snapshot_list *sl)
 	struct snapshot *s;
 	unsigned missing = 0;
 
-	DSS_INFO_LOG("looking for intervals containing too many snapshots\n");
+	DSS_DEBUG_LOG("looking for intervals containing too many snapshots\n");
 	for (interval = conf.num_intervals_arg - 1; interval >= 0; interval--) {
 		unsigned keep = desired_number_of_snapshots(interval, conf.num_intervals_arg);
 		unsigned num = sl->interval_count[interval];
@@ -271,7 +271,7 @@ static int remove_outdated_snapshot(struct snapshot_list *sl)
 	int i, ret;
 	struct snapshot *s;
 
-	DSS_INFO_LOG("looking for snapshots belonging to intervals greater than %d\n",
+	DSS_DEBUG_LOG("looking for snapshots belonging to intervals greater than %d\n",
 		conf.num_intervals_arg);
 	FOR_EACH_SNAPSHOT(s, i, sl) {
 		if (s->interval <= conf.num_intervals_arg)
