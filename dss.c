@@ -341,7 +341,7 @@ static int try_to_free_disk_space(int low_disk_space)
 	if (ret)
 		goto out;
 	DSS_CRIT_LOG("uhuhu: not enough disk space for a single snapshot\n");
-	ret= -ENOSPC;
+	ret = -ERRNO_TO_DSS_ERROR(ENOSPC);
 out:
 	free_snapshot_list(&sl);
 	return ret;
