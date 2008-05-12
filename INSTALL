@@ -12,45 +12,40 @@ NetBSD. However, it is run-tested on Linux only.
 Also make sure that rsync, http://rsync.samba.org/, is installed on
 your system. Version 2.6.1 or newer is required.
 
-In order to create snapshots of the existing directory
+Example:
+--------
 
-	/tmp/foo
+Suppose you'd like to create snapshots of the existing directory
+
+	/foo/bar
 
 in the directory
 
-	/tmp/bar,
+	/baz/qux.
 
-execute the commands
-
-	mkdir /tmp/bar
-	./dss --run --source-dir /tmp/foo --dest-dir /tmp/bar
-
-To print a list of all snapshots created so far, use
-
-	./dss --list --source-dir /tmp/foo --dest-dir /tmp/bar
-
-You might want to create the config file
+Create the config file
 
 	~/.dssrc
 
-that contains the values for the source and the destination
-directories. In the above example, this file would contain the
-following lines:
+that contains the values for the source and the destination directories
+as follows:
 
-	source-dir "/tmp/foo"
-	dest-dir "/tmp/bar"
+	echo 'source-dir "/foo/bar"' > ~/.dssrc
+	echo 'dest-dir "/baz/qux"' >> ~/.dssrc
 
-Using a configuration file allows you to simply type
+Then execute the commands
 
+	mkdir /baz/qux
 	./dss --run
 
-to start snapshot creation and
+In order to print the list of all snapshots created so far, use
 
 	./dss --list
 
-to list all avalable snapshots.
-
-Try
+Yes, it's really that easy. Of course, dss supports many more
+features and config options such as taking snapshots from remote
+hosts and several hooks that are executed whenever on certain events,
+for example whenever a snapshot was created successfully.  Try
 
 	./dss -h
 
