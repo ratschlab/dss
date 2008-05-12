@@ -124,7 +124,6 @@ static __printf_1_2 void dss_msg(const char* fmt,...)
 	va_end(argp);
 }
 
-/* TODO: Also consider number of inodes. */
 static int disk_space_low(void)
 {
 	struct disk_space ds;
