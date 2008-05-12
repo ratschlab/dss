@@ -8,12 +8,11 @@
 	<link rel="shortcut icon" href="dss.ico">
 </head>
 
-<a name="top"></a>
 <body>
 	<table>
 		<tr>
 			<td>
-				<a href="/"><IMG SRC="dss.png" alt="dss"></a>
+				<IMG SRC="dss.png" alt="dss">
 			</td>
 			<td>
 				<h1>The dyadic snapshot scheduler</h1>
@@ -23,7 +22,6 @@
 
 	<hr>
 
-	[<a href="#top">Top</a>]
 	[<a href="#readme">README</a>]
 	[<a href="#download">Download</a>]
 	[<a href="#install">INSTALL</a>]
