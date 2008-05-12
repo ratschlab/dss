@@ -107,13 +107,14 @@ details="
 
 groupoption "prune" P
 #~~~~~~~~~~~~~~~~~~~~
-"Remove a redundant snapshot"
+"Remove redundant and outdated snapshots"
 group="command"
 details="
-	A snapshot is considered redundant if it ether belongs to
-	an interval greater than the maximum number of intervals,
-	or if it belongs to an interval that already contains more
-	than the desired number of snapshots.
+	A snapshot is considered outdated if it belongs to an interval
+	greater than the maximum number of intervals. It is said to be
+	redundant if it belongs to an interval that already contains
+	more than the desired number of snapshots. This command gets
+	rid of such snapshots.
 "
 
 groupoption "ls" L
