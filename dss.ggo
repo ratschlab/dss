@@ -255,13 +255,13 @@ string typestr="command"
 optional
 details="
 	Execute this after a snapshot has successfully been
-	created. The full path of the newly created snapshot is passed
-	to the hook as the first argument.  The return value of that
-	hook is ignored.
+	created. The full path of the newly created snapshot is
+	passed to the hook as the first argument.  The exit code of
+	this hook is ignored.
 
 	For instance this hook can be used to count the number of
 	files per user and/or the disk usage patterns in order to
-	store them in a database for further treatment.
+	store them in a database for further analysis.
 "
 
 ###############################
@@ -306,7 +306,7 @@ optional
 details="
 	Specify the minimum amount of free inodes on the file system
 	containing the destination dir. If less than that many inodes
-	are free, snatshot removal kicks in just as in case of low
+	are free, snapshot removal kicks in just as in case of low
 	disk space.
 
 	Note that not every file system supports the concept of inodes.
