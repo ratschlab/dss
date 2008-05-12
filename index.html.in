@@ -1,0 +1,121 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+   "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+	<meta http-equiv='Content-Type' content='text/html; charset=iso-8859-1'>
+	<title>DSS - The dyadic snapshot scheduler</title>
+	<LINK href="dss.css" REL="stylesheet" TYPE="text/css">
+	<link rel="shortcut icon" href="dss.ico">
+</head>
+
+<a name="top"></a>
+<body>
+	<table>
+		<tr>
+			<td>
+				<a href="/"><IMG SRC="dss.png" alt="dss"></a>
+			</td>
+			<td>
+				<h1>The dyadic snapshot scheduler</h1>
+			</td>
+		</tr>
+	</table>
+
+	<hr>
+
+	[<a href="#top">Top</a>]
+	[<a href="#readme">README</a>]
+	[<a href="#download">Download</a>]
+	[<a href="#install">INSTALL</a>]
+	[<a href="#license">License</a>]
+	[<a href="#contact">Contact</a>]
+	[<a href="#manpage">Man page</a>]
+
+	<hr>
+
+	<center>
+		<h2>
+			<a name="readme">README</a>
+		</h2>
+	</center>
+
+	@README@
+
+	<hr>
+
+
+	<center>
+		<h2>
+			<a name="download">Download</a>
+		</h2>
+	</center>
+
+	<p>Only the source code is available for download. Either use
+
+		<a href="http://www.kernel.org/pub/software/scm/git/docs/">git</a>
+
+	to clone the dss repository by executing</p>
+
+	<center>
+
+		<tt>git clone git://git.tuebingen.mpg.de/dss</tt>
+
+	</center>
+
+	<p>or go to the
+
+		<a href="http://git-tuebingen.mpg.de/dss">dss gitweb page</a>
+
+	and click on the <em>snapshot</em> link to download a tarball.</p>
+
+	<hr>
+
+	<center>
+		<h2>
+			<a name="install">INSTALL</a>
+		</h2>
+	</center>
+
+	@INSTALL@
+
+	<hr>
+
+	<center>
+		<h2>
+			<a name="license">License</a>
+		</h2>
+	</center>
+
+	<p>dss is open source software, licensed under the
+
+	<a
+	href="http://www.gnu.org/licenses/old-licenses/gpl-2.0.html">GNU
+	General Public License, Version 2</a>.</p>
+
+	<hr>
+
+	<center>
+		<h2>
+			<a name="contact">Contact</a>
+		</h2>
+	</center>
+
+	<p> Andr&eacute; Noll, <a
+	href="mailto:maan@systemlinux.org">maan@systemlinux.org</a>
+	</p> Comments and bug reports are welcome Please provide
+	enough info such as the version of dss you are using and
+	relevant parts of the logs. Including the string [dss] in
+	the subject line is also a good idea.
+
+	<hr>
+
+	<center>
+		<h2>
+			<a name="manpage">Man page</a>
+		</h2>
+	</center>
+
+	@MAN_PAGE@
+
+</body> </html>
+
