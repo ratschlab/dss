@@ -82,12 +82,17 @@ details="
 	is also given.
 "
 
+##################
+section "Commands"
+##################
+
 defgroup "command"
 #=================
 groupdesc="
 	dss supports a couple of commands each of which corresponds
 	to a different command line option. Exactly one of these
 	options must be given.
+
 "
 required
 
