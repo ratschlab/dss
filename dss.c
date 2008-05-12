@@ -329,6 +329,8 @@ static int try_to_free_disk_space(int low_disk_space)
 	int ret;
 	struct snapshot_list sl;
 
+	if (!low_disk_space && conf.keep_redundant_given)
+		return 0;
 	dss_get_snapshot_list(&sl);
 	ret = remove_outdated_snapshot(&sl);
 	if (ret) /* error, or we are removing something */

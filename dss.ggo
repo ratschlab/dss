@@ -323,3 +323,17 @@ details="
 
 	A value of zero (the default) deactivates this check.
 "
+
+option "keep-redundant" k
+#~~~~~~~~~~~~~~~~~~~~~~~~
+"Prune by disk space only"
+flag off
+details="
+	If this flag is not given dss removes redundant and outdated
+	snapshots automatically.
+
+	Otherwise, this feature is deactivated so that snapshots
+	are only being removed in case disk space or inode ratio
+	becomes low. Use this flag if the file system containing the
+	destination directory is used for snapshots only.
+"
