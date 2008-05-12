@@ -214,13 +214,14 @@ details="
 	unit intervals.
 
 	dss removes any snapshots older than n times u and tries to
-	keep 2^(k-1) snapshots in interval k, where the interval number
-	k counts from zero, zero being the most recent unit interval.
+	keep 2^(n - k - 1) snapshots in interval k, where the interval
+	number k counts from zero, zero being the most recent unit
+	interval.
 
 	In other words, the oldest snapshot will at most be u * n days
 	(= 20 days if default values are used) old.  Moreover, there
 	are at most 2^n - 1 snapshots in total (i. e. 31 by default).
-	Observe that you have to create at least 2 ^ (n - 1) snapshots
+	Observe that you have to create at least 2^(n - 1) snapshots
 	each interval for this to work out because that is the number
 	of snapshots in interval zero.
 "
