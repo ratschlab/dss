@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 1997-2008 Andre Noll <maan@systemlinux.org>
+ *
+ * Licensed under the GPL v2. For licencing details see COPYING.
+ */
 
 /** debug loglevel, gets really noisy */
 #define DEBUG 1

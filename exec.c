@@ -1,3 +1,9 @@
+/*
+ * Copyright (C) 2003-2008 Andre Noll <maan@systemlinux.org>
+ *
+ * Licensed under the GPL v2. For licencing details see COPYING.
+ */
+
 /** \file exec.c Helper functions for spawning new processes. */
 
 #include <string.h>

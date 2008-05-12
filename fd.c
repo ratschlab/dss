@@ -1,3 +1,9 @@
+/*
+ * Copyright (C) 2006-2008 Andre Noll <maan@systemlinux.org>
+ *
+ * Licensed under the GPL v2. For licencing details see COPYING.
+ */
+
 #include <unistd.h>
 #include <assert.h>
 #include <string.h>

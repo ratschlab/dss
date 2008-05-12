@@ -1,3 +1,11 @@
+/*
+ * Copyright (C) 2005-2008 Andre Noll <maan@systemlinux.org>
+ *
+ * Licensed under the GPL v2. For licencing details see COPYING.
+ */
+
+/** \file time.c Helper functions for dealing with time values. */
+
 #include <sys/time.h>
 #include <time.h>
 #include <inttypes.h>
@@ -8,14 +16,6 @@
 #include "error.h"
 #include "string.h"
 #include "log.h"
-
-/*
- * Copyright (C) 2005-2008 Andre Noll <maan@systemlinux.org>
- *
- * Licensed under the GPL v2. For licencing details see COPYING.
- */
-
-/** \file time.c Helper functions for dealing with time values. */
 
 /**
  * Convert struct timeval to milliseconds.

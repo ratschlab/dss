@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2008 Andre Noll <maan@systemlinux.org>
+ *
+ * Licensed under the GPL v2. For licencing details see COPYING.
+ */
 #include <sys/statvfs.h>
 #include <stdio.h>
 #include <assert.h>

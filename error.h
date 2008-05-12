@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2006-2008 Andre Noll <maan@systemlinux.org>
+ *
+ * Licensed under the GPL v2. For licencing details see COPYING.
+ */
 extern char *dss_errlist[];
 extern char *dss_error_txt;
 

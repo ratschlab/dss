@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2008 Andre Noll <maan@systemlinux.org>
+ *
+ * Licensed under the GPL v2. For licencing details see COPYING.
+ */
 
 /** The state of snapshot creation. */
 enum {
