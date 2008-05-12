@@ -44,8 +44,8 @@ In order to print the list of all snapshots created so far, use
 
 Yes, it's really that easy. Of course, dss supports many more
 features and config options such as taking snapshots from remote
-hosts and several hooks that are executed whenever on certain events,
-for example whenever a snapshot was created successfully.  Try
+hosts and several hooks that are executed on certain events, for
+example whenever a snapshot was created successfully.  Try
 
 	./dss -h
 
