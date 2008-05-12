@@ -77,7 +77,7 @@ static int call_command_handler(void)
 {
 	COMMANDS
 	DSS_EMERG_LOG("BUG: did not find command handler\n");
-	exit(EXIT_FAILURE);
+	return -E_BUG;
 }
 #undef COMMAND
 #undef COMMANDS
@@ -558,7 +558,7 @@ static int handle_sigchld(void)
 		return 1;
 	}
 	DSS_EMERG_LOG("BUG: unknown process %d died\n", (int)pid);
-	exit(EXIT_FAILURE);
+	return -E_BUG;
 }
 
 static int check_config(void)
@@ -576,8 +576,7 @@ static int check_config(void)
 	return 1;
 }
 
-/* exits on errors */
-static void parse_config_file(int override)
+static int parse_config_file(int override)
 {
 	int ret;
 	char *config_file;
@@ -633,36 +632,33 @@ static void parse_config_file(int override)
 		logfile = open_log(conf.logfile_arg);
 		log_welcome(conf.loglevel_arg);
 	}
-	DSS_EMERG_LOG("loglevel: %d\n", conf.loglevel_arg);
+	DSS_DEBUG_LOG("loglevel: %d\n", conf.loglevel_arg);
 //	cmdline_parser_dump(logfile? logfile : stdout, &conf);
 out:
 	free(config_file);
-	if (ret >= 0)
-		return;
-	DSS_EMERG_LOG("%s\n", dss_strerror(-ret));
-	exit(EXIT_FAILURE);
+	if (ret < 0)
+		DSS_EMERG_LOG("%s\n", dss_strerror(-ret));
+	return ret;
 }
 
-static void change_to_dest_dir(void)
+static int change_to_dest_dir(void)
+{
+	DSS_INFO_LOG("changing cwd to %s\n", conf.dest_dir_arg);
+	return dss_chdir(conf.dest_dir_arg);
+}
+
+static int handle_sighup(void)
 {
 	int ret;
 
-	DSS_INFO_LOG("changing cwd to %s\n", conf.dest_dir_arg);
-	ret = dss_chdir(conf.dest_dir_arg);
-	if (ret >= 0)
-		return;
-	DSS_EMERG_LOG("%s\n", dss_strerror(-ret));
-	exit(EXIT_FAILURE);
-}
-
-static void handle_sighup(void)
-{
 	DSS_NOTICE_LOG("SIGHUP\n");
-	parse_config_file(1);
-	change_to_dest_dir();
+	ret = parse_config_file(1);
+	if (ret < 0)
+		return ret;
+	return change_to_dest_dir();
 }
 
-static void handle_signal(void)
+static int handle_signal(void)
 {
 	int sig, ret = next_signal();
 
@@ -675,10 +671,10 @@ static void handle_signal(void)
 		restart_rsync_process();
 		kill_process(rsync_pid);
 		kill_process(rm_pid);
-		exit(EXIT_FAILURE);
+		ret = -E_SIGNAL;
+		break;
 	case SIGHUP:
-		handle_sighup();
-		ret = 1;
+		ret = handle_sighup();
 		break;
 	case SIGCHLD:
 		ret = handle_sigchld();
@@ -687,6 +683,7 @@ static void handle_signal(void)
 out:
 	if (ret < 0)
 		DSS_ERROR_LOG("%s\n", dss_strerror(-ret));
+	return ret;
 }
 
 static void create_rsync_argv(char ***argv, int64_t *num)
@@ -773,18 +770,21 @@ static int select_loop(void)
 		DSS_DEBUG_LOG("tvp: %p, tv_sec : %lu\n", tvp, (long unsigned) tv.tv_sec);
 		ret = dss_select(signal_pipe + 1, &rfds, NULL, tvp);
 		if (ret < 0)
-			return ret;
-		if (FD_ISSET(signal_pipe, &rfds))
-			handle_signal();
+			goto out;
+		if (FD_ISSET(signal_pipe, &rfds)) {
+			ret = handle_signal();
+			if (ret < 0)
+				goto out;
+		}
 		if (rm_pid)
 			continue;
 		ret = disk_space_low();
 		if (ret < 0)
-			break;
+			goto out;
 		low_disk_space = ret;
 		ret = try_to_free_disk_space(low_disk_space);
 		if (ret < 0)
-			break;
+			goto out;
 		if (rm_pid) {
 			stop_rsync_process();
 			continue;
@@ -823,6 +823,21 @@ out:
 	return ret;
 }
 
+static void exit_hook(int exit_code)
+{
+	int fds[3] = {0, 0, 0};
+	char *cmd;
+	pid_t pid;
+
+	if (!conf.exit_hook_given)
+		return;
+	cmd = make_message("%s %s", conf.exit_hook_arg,
+		dss_strerror(-exit_code));
+	DSS_NOTICE_LOG("executing %s\n", cmd);
+	dss_exec_cmdline_pid(&pid, cmd, fds);
+	free(cmd);
+}
+
 static int com_run(void)
 {
 	int ret;
@@ -835,7 +850,11 @@ static int com_run(void)
 	if (ret < 0)
 		return ret;
 	compute_next_snapshot_time();
-	return select_loop();
+	ret = select_loop();
+	if (ret >= 0) /* impossible */
+		ret = -E_BUG;
+	exit_hook(ret);
+	return ret;
 }
 
 static int com_prune(void)
@@ -939,7 +958,7 @@ static int com_ls(void)
 	return 1;
 }
 
-static void setup_signal_handling(void)
+static int setup_signal_handling(void)
 {
 	int ret;
 
@@ -947,17 +966,11 @@ static void setup_signal_handling(void)
 	signal_pipe = signal_init(); /* always successful */
 	ret = install_sighandler(SIGINT);
 	if (ret < 0)
-		goto err;
+		return ret;
 	ret = install_sighandler(SIGTERM);
 	if (ret < 0)
-		goto err;
-	ret = install_sighandler(SIGCHLD);
-	if (ret < 0)
-		goto err;
-	return;
-err:
-	DSS_EMERG_LOG("could not install signal handlers\n");
-	exit(EXIT_FAILURE);
+		return ret;
+	return install_sighandler(SIGCHLD);
 }
 
 /**
@@ -978,13 +991,19 @@ int main(int argc, char **argv)
 	};
 
 	cmdline_parser_ext(argc, argv, &conf, &params); /* aborts on errors */
-	parse_config_file(0);
-
+	ret = parse_config_file(0);
+	if (ret < 0)
+		goto out;
 	if (conf.daemon_given)
 		daemon_init();
-	change_to_dest_dir();
-	setup_signal_handling();
+	ret = change_to_dest_dir();
+	if (ret < 0)
+		goto out;
+	ret = setup_signal_handling();
+	if (ret < 0)
+		goto out;
 	ret = call_command_handler();
+out:
 	if (ret < 0)
 		DSS_EMERG_LOG("%s\n", dss_strerror(-ret));
 	exit(ret >= 0? EXIT_SUCCESS : EXIT_FAILURE);

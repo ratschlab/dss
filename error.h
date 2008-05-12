@@ -65,7 +65,10 @@ static inline char *dss_strerror(int num)
 	DSS_ERROR(DUP_PIPE, "exec error: can not create pipe") \
 	DSS_ERROR(INVOLUNTARY_EXIT, "unexpected termination cause") \
 	DSS_ERROR(BAD_EXIT_CODE, "unexpected exit code") \
-	DSS_ERROR(SIGNAL_SIG_ERR, "signal() returned SIG_ERR")
+	DSS_ERROR(SIGNAL_SIG_ERR, "signal() returned SIG_ERR") \
+	DSS_ERROR(SIGNAL, "caught terminating signal") \
+	DSS_ERROR(BUG, "values of beta might cause dom!") \
+
 
 /**
  * This is temporarily defined to expand to its first argument (prefixed by

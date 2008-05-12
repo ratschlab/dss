@@ -273,6 +273,22 @@ details="
 	store them in a database for further analysis.
 "
 
+option "exit-hook" e
+#~~~~~~~~~~~~~~~~~~~
+"Executed if run command exits"
+string typestr="command"
+optional
+details="
+	This hook is only used if the --run command was given which
+	instructs dss to run in an endless loop. The exit-hook gets
+	executed whenever this endless loop terminates. The reason
+	for terminating the loop is passed as the first argument.
+
+	One possible application for this hook is to send email to the
+	system administrator to let her know that no more snapshots
+	are going to be created.
+"
+
 ###############################
 section "Disk space monitoring"
 ###############################
