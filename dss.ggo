@@ -133,7 +133,9 @@ groupoption "run" R
 group="command"
 details="
 	This is the main mode of operation. Snapshots will be created
-	as needed and pruned automatically.
+	in an endless loop as needed and pruned automatically. The loop
+	only terminates on fatal errors or if a terminating signal was
+	received. See also the --exit-hook option.
 "
 
 ###############################
