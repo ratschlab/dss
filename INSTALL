@@ -2,14 +2,17 @@ Type
 
 	make
 
-in the dss source directory to build the dss executable. You
-likely need a recent version of gnu gengetopt,
-ftp://ftp.gnu.org/pub/gnu/gengetopt/, to compile dss.
+in the dss source directory to build the dss executable and copy it to
+some directory that is included in your PATH, e.g. to $HOME/bin or to
+/usr/local/bin.
+
+Note that you'll likely need a recent version of
+ftp://ftp.gnu.org/pub/gnu/gengetopt/ (gnu gengetopt) to compile dss.
 
 dss is known to compile on Linux, MacOS, Solaris, FreeBSD and
-NetBSD. However, it is run-tested on Linux only.
+NetBSD. However, it is run-tested only on Linux.
 
-Also make sure that rsync, http://rsync.samba.org/, is installed on
+Also make sure that http://rsync.samba.org/ (rsync) is installed on
 your system. Version 2.6.1 or newer is required.
 
 Example:
@@ -36,21 +39,21 @@ as follows:
 Then execute the commands
 
 	mkdir /baz/qux
-	./dss --run
+	dss --run
 
 In order to print the list of all snapshots created so far, use
 
-	./dss --list
+	dss --list
 
 Yes, it's really that easy. Of course, dss supports many more
 features and config options such as taking snapshots from remote
 hosts and several hooks that are executed on certain events, for
 example whenever a snapshot was created successfully.  Try
 
-	./dss -h
+	dss -h
 
 for an overview of all supported command line options or
 
-	./dss --detailed-help
+	dss --detailed-help
 
 for the full help text.
