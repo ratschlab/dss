@@ -36,8 +36,8 @@ cmdline.o: cmdline.c cmdline.h
 cmdline.c cmdline.h: dss.ggo
 	gengetopt --conf-parser < $<
 
-dss.1: dss
-	help2man -h --detailed-help -N ./$< > $@
+dss.1: dss dss.1.inc
+	help2man -h --detailed-help --include dss.1.inc -N ./$< > $@
 
 %.1.html: %.1
 	man2html $< > $@
