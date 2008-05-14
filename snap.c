@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "gcc-compat.h"
 #include "error.h"
