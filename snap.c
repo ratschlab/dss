@@ -20,6 +20,21 @@
 #include "fd.h"
 
 /**
+ * Wrapper for isdigit.
+ * NetBSD needs this.
+ *
+ * The values should be cast to an unsigned char first, then to int.
+ * Why? Because the isdigit (as do all other is/to functions/macros)
+ * expect a number from 0 upto and including 255 as their (int) argument.
+ * Because char is signed on most systems, casting it to int immediately
+ * gives the functions an argument between -128 and 127 (inclusive),
+ * which they will use as an array index, and which will thus fail
+ * horribly for characters which have their most significant bit set.
+ */
+#define dss_isdigit(c) isdigit((int)(unsigned char)(c))
+
+
+/**
  * Return the desired number of snapshots of an interval.
  */
 unsigned desired_number_of_snapshots(int interval_num, int num_intervals)
@@ -47,7 +62,7 @@ static int is_snapshot(const char *dirname, int64_t now, int unit_interval,
 	if (!dash || !dash[1] || dash == dirname)
 		return 0;
 	for (i = 0; dirname[i] != '-'; i++)
-		if (!isdigit(dirname[i]))
+		if (!dss_isdigit(dirname[i]))
 			return 0;
 	tmp = dss_strdup(dirname);
 	tmp[i] = '\0';
@@ -77,7 +92,7 @@ static int is_snapshot(const char *dirname, int64_t now, int unit_interval,
 	if (!dot || !dot[1] || dot == tmp)
 		return 0;
 	for (i = 0; tmp[i] != '.'; i++)
-		if (!isdigit(tmp[i]))
+		if (!dss_isdigit(tmp[i]))
 			return 0;
 	tmp = dss_strdup(dash + 1);
 	tmp[i] = '\0';

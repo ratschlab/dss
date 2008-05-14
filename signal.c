@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <sys/select.h>
 
 
 #include "gcc-compat.h"
