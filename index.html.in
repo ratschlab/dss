@@ -48,7 +48,7 @@
 		</h2>
 	</center>
 
-	<p>Only the source code is available for download. Either use
+	<p>Only the source code is available for download. Use
 
 		<a href="http://www.kernel.org/pub/software/scm/git/docs/">git</a>
 
@@ -60,12 +60,17 @@
 
 	</center>
 
-	<p>or go to the
+	<p> or grab the
+
+	<a href="http://git.tuebingen.mpg.de/cgi-bin/gitweb.cgi?p=dss.git;a=snapshot;h=HEAD;sf=tgz">tarball</a>
+
+	of the current tree. If you prefer to download the tarball of
+	the latest release, select the corresponding <em>snapshot</em>
+	link on the
 
 		<a href="http://git.tuebingen.mpg.de/dss">dss gitweb page</a>
 
-	and click on the <em>snapshot</em> link on the right to
-	download a tarball.</p>
+	</p>
 
 	<hr>
 
