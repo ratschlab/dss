@@ -826,16 +826,13 @@ out:
 static void exit_hook(int exit_code)
 {
 	int fds[3] = {0, 0, 0};
-	char *cmd;
+	char *argv[] = {conf.exit_hook_arg, dss_strerror(-exit_code), NULL};
 	pid_t pid;
 
 	if (!conf.exit_hook_given)
 		return;
-	cmd = make_message("%s %s", conf.exit_hook_arg,
-		dss_strerror(-exit_code));
-	DSS_NOTICE_LOG("executing %s\n", cmd);
-	dss_exec_cmdline_pid(&pid, cmd, fds);
-	free(cmd);
+	DSS_NOTICE_LOG("executing %s %s\n", argv[0], argv[1]);
+	dss_exec(&pid, conf.exit_hook_arg, argv, fds);
 }
 
 static int com_run(void)
