@@ -498,6 +498,13 @@ static int handle_rsync_exit(int status)
 		goto out;
 	}
 	es = WEXITSTATUS(status);
+	if (es == 13) {	/* Errors with program diagnostics */
+		DSS_WARNING_LOG("rsync process %d returned %d -- restarting\n",
+			(int)rsync_pid, es);
+		snapshot_creation_status = SCS_RSYNC_NEEDS_RESTART;
+		ret = 1;
+		goto out;
+	}
 	if (es != 0 && es != 23 && es != 24) {
 		DSS_ERROR_LOG("rsync process %d returned %d\n", (int)rsync_pid, es);
 		ret = -E_BAD_EXIT_CODE;
@@ -726,6 +733,9 @@ static void create_rsync_argv(char ***argv, int64_t *num)
 static void free_rsync_argv(char **argv)
 {
 	int i;
+
+	if (!argv)
+		return;
 	for (i = 0; argv[i]; i++)
 		free(argv[i]);
 	free(argv);
@@ -751,11 +761,11 @@ static int select_loop(void)
 	int ret;
 	/* check every 60 seconds for free disk space */
 	struct timeval tv;
+	char **rsync_argv = NULL;
 
 	for (;;) {
 		fd_set rfds;
 		int low_disk_space;
-		char **rsync_argv;
 		struct timeval now, *tvp;
 
 		if (rm_pid)
@@ -801,10 +811,15 @@ static int select_loop(void)
 			continue;
 		case SCS_PRE_HOOK_RUNNING:
 			continue;
+		case SCS_RSYNC_NEEDS_RESTART:
+			ret = create_snapshot(rsync_argv);
+			if (ret < 0)
+				goto out;
+			continue;
 		case SCS_PRE_HOOK_SUCCESS:
+			free_rsync_argv(rsync_argv);
 			create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
 			ret = create_snapshot(rsync_argv);
-			free_rsync_argv(rsync_argv);
 			if (ret < 0)
 				goto out;
 			continue;

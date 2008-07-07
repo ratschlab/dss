@@ -16,6 +16,8 @@ enum {
 	SCS_RSYNC_RUNNING,
 	/** The rsync process exited successfully. */
 	SCS_RSYNC_SUCCESS,
+	/** The rsync process needs to be restarted. */
+	SCS_RSYNC_NEEDS_RESTART,
 	/** The post-create hook has been started. */
 	SCS_POST_HOOK_RUNNING,
 };
