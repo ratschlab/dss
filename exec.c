@@ -48,7 +48,7 @@ int dss_exec(pid_t *pid, const char *file, char *const *const args, int *fds)
 		goto err_out;
 	if (!fds[0] || !fds[1] || !fds[2]) {
 		ret = -E_NULL_OPEN;
-		null = open("/dev/null", O_RDONLY);
+		null = open("/dev/null", O_RDWR);
 		if (null < 0)
 			goto err_out;
 	}
