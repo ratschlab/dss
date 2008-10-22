@@ -141,6 +141,6 @@ int64_t get_current_time(void)
 {
 	time_t now;
 	time(&now);
-	DSS_DEBUG_LOG("now: %lli\n", (long long) now);
+	DSS_DEBUG_LOG("now: %jd\n", (intmax_t)now);
 	return (int64_t)now;
 }

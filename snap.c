@@ -188,17 +188,15 @@ void free_snapshot_list(struct snapshot_list *sl)
 
 __malloc char *incomplete_name(int64_t start)
 {
-	return make_message("%lli-incomplete", (long long)start);
+	return make_message("%" PRId64 "-incomplete", start);
 }
 
 __malloc char *being_deleted_name(struct snapshot *s)
 {
 	if (s->flags & SS_COMPLETE)
-		return make_message("%lli-%lli.being_deleted",
-			(long long)s->creation_time,
-			(long long)s->completion_time);
-	return make_message("%lli-incomplete.being_deleted",
-		(long long)s->creation_time);
+		return make_message("%" PRId64 "-%" PRId64 ".being_deleted",
+			s->creation_time, s->completion_time);
+	return make_message("%" PRId64 "-incomplete.being_deleted", s->creation_time);
 }
 
 int complete_name(int64_t start, int64_t end, char **result)
@@ -216,7 +214,7 @@ int complete_name(int64_t start, int64_t end, char **result)
 		return -E_STRFTIME;
 	if (!strftime(end_str, sizeof(end_str), "%a_%b_%d_%Y_%H_%M_%S", &end_tm))
 		return -E_STRFTIME;
-	*result = make_message("%lli-%lli.%s-%s", (long long) start, (long long) end,
+	*result = make_message("%" PRId64 "-%" PRId64 ".%s-%s", start, end,
 		start_str, end_str);
 	return 1;
 }
