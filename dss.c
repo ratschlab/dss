@@ -964,8 +964,12 @@ static int com_ls(void)
 	struct snapshot *s;
 
 	dss_get_snapshot_list(&sl);
-	FOR_EACH_SNAPSHOT(s, i, &sl)
-		dss_msg("%u\t%s\n", s->interval, s->name);
+	FOR_EACH_SNAPSHOT(s, i, &sl) {
+		int64_t d = 0;
+		if (s->flags & SS_COMPLETE)
+			d = (s->completion_time - s->creation_time) / 60;
+		dss_msg("%u\t%s\t%3" PRId64 ":%02" PRId64 "\n", s->interval, s->name, d/60, d%60);
+	};
 	free_snapshot_list(&sl);
 	return 1;
 }
