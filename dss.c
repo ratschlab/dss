@@ -502,6 +502,8 @@ static int handle_rsync_exit(int status)
 		DSS_WARNING_LOG("rsync process %d returned %d -- restarting\n",
 			(int)rsync_pid, es);
 		snapshot_creation_status = SCS_RSYNC_NEEDS_RESTART;
+		gettimeofday(&next_snapshot_time, NULL);
+		next_snapshot_time.tv_sec += 60;
 		ret = 1;
 		goto out;
 	}
