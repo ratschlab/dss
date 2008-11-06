@@ -101,7 +101,7 @@ static int is_snapshot(const char *dirname, int64_t now, int unit_interval,
 	free(tmp);
 	if (ret < 0)
 		return 0;
-	if (num > now)
+	if (num > now || num < s->creation_time)
 		return 0;
 	s->completion_time = num;
 	s->flags = SS_COMPLETE;
