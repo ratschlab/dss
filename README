@@ -9,7 +9,7 @@ sparse or snapshots become older than the specified time.
 dss is also user-friendly because users can browse the snapshot
 directories without admin intervention and see the contents of the file
 system at the various times a snapshot was taken. In particular, users
-can easily restore accidently removed files by using their favorite
+can easily restore accidentally removed files by using their favorite
 file browser to simply copy files from the snapshot directory back
 to the live system.
 
