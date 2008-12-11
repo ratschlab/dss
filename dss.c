@@ -175,13 +175,13 @@ static void compute_next_snapshot_time(void)
 	tmp.tv_sec = x;
 	tmp.tv_usec = 0;
 	ret = tv_diff(&unit_interval, &tmp, &diff); /* total sleep time per unit interval */
-	gettimeofday(&now, NULL);
-	if (ret < 0 || !s)
+	if (ret < 0 || !s) /* unit_interval < tmp or no snapshot */
 		goto min_sleep;
 	tv_divide(wanted, &diff, &tmp); /* sleep time betweeen two snapshots */
-	diff.tv_sec = s->completion_time;
+	diff.tv_sec = s->completion_time; /* completion time of the the latest snaphot */
 	diff.tv_usec = 0;
 	tv_add(&diff, &tmp, &next_snapshot_time);
+	gettimeofday(&now, NULL);
 	if (tv_diff(&now, &next_snapshot_time, NULL) < 0)
 		goto out;
 min_sleep:
