@@ -175,13 +175,13 @@ static void compute_next_snapshot_time(void)
 	tmp.tv_sec = x;
 	tmp.tv_usec = 0;
 	ret = tv_diff(&unit_interval, &tmp, &diff); /* total sleep time per unit interval */
-	gettimeofday(&now, NULL);
-	if (ret < 0 || !s)
+	if (ret < 0 || !s) /* unit_interval < tmp or no snapshot */
 		goto min_sleep;
 	tv_divide(wanted, &diff, &tmp); /* sleep time betweeen two snapshots */
-	diff.tv_sec = s->completion_time;
+	diff.tv_sec = s->completion_time; /* completion time of the the latest snaphot */
 	diff.tv_usec = 0;
 	tv_add(&diff, &tmp, &next_snapshot_time);
+	gettimeofday(&now, NULL);
 	if (tv_diff(&now, &next_snapshot_time, NULL) < 0)
 		goto out;
 min_sleep:
@@ -695,6 +695,21 @@ out:
 	return ret;
 }
 
+/*
+ * We can not use rsync locally if the local user is different from the remote
+ * user or if the src dir is not on the local host (or both).
+ */
+static int use_rsync_locally(char *logname)
+{
+	char *h = conf.remote_host_arg;
+
+	if (strcmp(h, "localhost") && strcmp(h, "127.0.0.1"))
+		return 0;
+	if (conf.remote_user_given && strcmp(conf.remote_user_arg, logname))
+		return 0;
+	return 1;
+}
+
 static void create_rsync_argv(char ***argv, int64_t *num)
 {
 	char *logname, *newest;
@@ -718,7 +733,7 @@ static void create_rsync_argv(char ***argv, int64_t *num)
 	} else
 		DSS_INFO_LOG("no previous snapshot found\n");
 	logname = dss_logname();
-	if (conf.remote_user_given && !strcmp(conf.remote_user_arg, logname))
+	if (use_rsync_locally(logname))
 		(*argv)[i++] = dss_strdup(conf.source_dir_arg);
 	else
 		(*argv)[i++] = make_message("%s@%s:%s/", conf.remote_user_given?
