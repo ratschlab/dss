@@ -380,8 +380,8 @@ static int post_create_hook(void)
 		compute_next_snapshot_time();
 		return 0;
 	}
-	cmd = make_message("%s %s", conf.post_create_hook_arg,
-		path_to_last_complete_snapshot);
+	cmd = make_message("%s %s/%s", conf.post_create_hook_arg,
+		conf.dest_dir_arg, path_to_last_complete_snapshot);
 	DSS_NOTICE_LOG("executing %s\n", cmd);
 	ret = dss_exec_cmdline_pid(&post_create_hook_pid, cmd, fds);
 	free(cmd);
