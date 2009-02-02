@@ -620,6 +620,15 @@ static int parse_config_file(int override)
 			.check_ambiguity = 0,
 			.print_errors = 1
 		};
+		if (override) { /* invalidate all rsync options */
+			int i;
+
+			for (i = 0; i < conf.rsync_option_given; i++) {
+				free(conf.rsync_option_arg[i]);
+				conf.rsync_option_arg[i] = NULL;
+			}
+			conf.rsync_option_given = 0;
+		}
 		cmdline_parser_config_file(config_file, &conf, &params);
 	}
 	ret = check_config();
