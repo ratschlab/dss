@@ -380,8 +380,8 @@ static int post_create_hook(void)
 		compute_next_snapshot_time();
 		return 0;
 	}
-	cmd = make_message("%s %s", conf.post_create_hook_arg,
-		path_to_last_complete_snapshot);
+	cmd = make_message("%s %s/%s", conf.post_create_hook_arg,
+		conf.dest_dir_arg, path_to_last_complete_snapshot);
 	DSS_NOTICE_LOG("executing %s\n", cmd);
 	ret = dss_exec_cmdline_pid(&post_create_hook_pid, cmd, fds);
 	free(cmd);
@@ -620,6 +620,15 @@ static int parse_config_file(int override)
 			.check_ambiguity = 0,
 			.print_errors = 1
 		};
+		if (override) { /* invalidate all rsync options */
+			int i;
+
+			for (i = 0; i < conf.rsync_option_given; i++) {
+				free(conf.rsync_option_arg[i]);
+				conf.rsync_option_arg[i] = NULL;
+			}
+			conf.rsync_option_given = 0;
+		}
 		cmdline_parser_config_file(config_file, &conf, &params);
 	}
 	ret = check_config();
