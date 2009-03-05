@@ -192,7 +192,7 @@ out:
 }
 
 
-static int remove_snapshot(struct snapshot *s)
+static int remove_snapshot(struct snapshot *s, char *why)
 {
 	int fds[3] = {0, 0, 0};
 	assert(!rm_pid);
@@ -202,7 +202,8 @@ static int remove_snapshot(struct snapshot *s)
 
 	if (ret < 0)
 		goto out;
-	DSS_NOTICE_LOG("removing %s (interval = %i)\n", s->name, s->interval);
+	DSS_NOTICE_LOG("removing %s snapshot %s (interval = %i)\n",
+		why, s->name, s->interval);
 	ret = dss_exec(&rm_pid, argv[0], argv, fds);
 out:
 	free(new_name);
@@ -271,7 +272,7 @@ static int remove_redundant_snapshot(struct snapshot_list *sl)
 				victim->name, victim->interval);
 			continue;
 		}
-		ret = remove_snapshot(victim);
+		ret = remove_snapshot(victim, "redundant");
 		return ret < 0? ret : 1;
 	}
 	return 0;
@@ -294,7 +295,7 @@ static int remove_outdated_snapshot(struct snapshot_list *sl)
 				s->name, s->interval);
 			continue;
 		}
-		ret = remove_snapshot(s);
+		ret = remove_snapshot(s, "outdated");
 		if (ret < 0)
 			return ret;
 		return 1;
@@ -311,7 +312,7 @@ static int remove_oldest_snapshot(struct snapshot_list *sl)
 	DSS_INFO_LOG("oldest snapshot: %s\n", s->name);
 	if (snapshot_is_being_created(s))
 		return 0;
-	return remove_snapshot(s);
+	return remove_snapshot(s, "oldest");
 }
 
 static int rename_incomplete_snapshot(int64_t start)
