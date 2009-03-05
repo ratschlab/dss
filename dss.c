@@ -54,6 +54,8 @@ static int64_t current_snapshot_creation_time;
 static char *path_to_last_complete_snapshot;
 /** \sa \ref snap.h for details. */
 static unsigned snapshot_creation_status;
+/** \sa \ref snap.h for details. */
+static unsigned snapshot_removal_status;
 
 
 DEFINE_DSS_ERRLIST;

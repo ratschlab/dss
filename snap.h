@@ -22,6 +22,20 @@ enum {
 	SCS_POST_HOOK_RUNNING,
 };
 
+/** The state of snapshot removal. */
+enum {
+	/** No snapshot is currently being removed. */
+	SRS_READY,
+	/** The pre-removal hook has been started. */
+	SRS_PRE_HOOK_RUNNING,
+	/** The pre-remove hook failed, we're waiting to execute it again. */
+	SRS_PRE_HOOK_FAILURE,
+	/** The rm command is currently executing. */
+	SRS_RM_RUNNING,
+	/** The post-remove hook ist running. */
+	SRS_POST_HOOK_RUNNING,
+};
+
 /**
  * The status of a snapshot.
  *
