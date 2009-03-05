@@ -209,6 +209,11 @@ out:
 	return ret;
 }
 
+static int snapshot_is_being_created(struct snapshot *s)
+{
+	return s->creation_time == current_snapshot_creation_time;
+}
+
 /*
  * return: 0: no redundant snapshots, 1: rm process started, negative: error
  */
@@ -235,6 +240,8 @@ static int remove_redundant_snapshot(struct snapshot_list *sl)
 		FOR_EACH_SNAPSHOT(s, i, sl) {
 			int64_t this_score;
 
+			if (snapshot_is_being_created(s))
+				continue;
 			//DSS_DEBUG_LOG("checking %s\n", s->name);
 			if (s->interval > interval) {
 				prev = s;
@@ -278,6 +285,8 @@ static int remove_outdated_snapshot(struct snapshot_list *sl)
 	DSS_DEBUG_LOG("looking for snapshots belonging to intervals greater than %d\n",
 		conf.num_intervals_arg);
 	FOR_EACH_SNAPSHOT(s, i, sl) {
+		if (snapshot_is_being_created(s))
+			continue;
 		if (s->interval <= conf.num_intervals_arg)
 			continue;
 		if (conf.dry_run_given) {
@@ -300,8 +309,8 @@ static int remove_oldest_snapshot(struct snapshot_list *sl)
 	if (!s) /* no snapshot found */
 		return 0;
 	DSS_INFO_LOG("oldest snapshot: %s\n", s->name);
-	if (s->creation_time == current_snapshot_creation_time)
-		return 0; /* do not remove the snapshot currently being created */
+	if (snapshot_is_being_created(s))
+		return 0;
 	return remove_snapshot(s);
 }
 
