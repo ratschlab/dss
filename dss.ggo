@@ -350,8 +350,8 @@ details="
 	If this flag is not given dss removes redundant and outdated
 	snapshots automatically.
 
-	Otherwise, this feature is deactivated so that snapshots
-	are only being removed in case disk space or inode ratio
+	Otherwise, this feature is deactivated so that snapshots are
+	only being removed in case disk space or number of free inodes
 	becomes low. Use this flag if the file system containing the
 	destination directory is used for snapshots only.
 "

@@ -9,6 +9,14 @@ some directory that is included in your PATH, e.g. to $HOME/bin or to
 Note that you'll likely need a recent version of
 ftp://ftp.gnu.org/pub/gnu/gengetopt/ (gnu gengetopt) to compile dss.
 
+Optionally, type
+
+	 make man
+
+to create the man page of dss. This invokes help2man so make sure
+that help2man is installed on your system. Note that the man page is
+just the nroff variant of the output of "dss --detailed-help".
+
 dss is known to compile on Linux, MacOS, Solaris, FreeBSD and
 NetBSD. However, it is run-tested only on Linux.
 
