@@ -192,7 +192,7 @@ out:
 }
 
 
-static int remove_snapshot(struct snapshot *s)
+static int remove_snapshot(struct snapshot *s, char *why)
 {
 	int fds[3] = {0, 0, 0};
 	assert(!rm_pid);
@@ -202,11 +202,17 @@ static int remove_snapshot(struct snapshot *s)
 
 	if (ret < 0)
 		goto out;
-	DSS_NOTICE_LOG("removing %s (interval = %i)\n", s->name, s->interval);
+	DSS_NOTICE_LOG("removing %s snapshot %s (interval = %i)\n",
+		why, s->name, s->interval);
 	ret = dss_exec(&rm_pid, argv[0], argv, fds);
 out:
 	free(new_name);
 	return ret;
+}
+
+static int snapshot_is_being_created(struct snapshot *s)
+{
+	return s->creation_time == current_snapshot_creation_time;
 }
 
 /*
@@ -235,6 +241,8 @@ static int remove_redundant_snapshot(struct snapshot_list *sl)
 		FOR_EACH_SNAPSHOT(s, i, sl) {
 			int64_t this_score;
 
+			if (snapshot_is_being_created(s))
+				continue;
 			//DSS_DEBUG_LOG("checking %s\n", s->name);
 			if (s->interval > interval) {
 				prev = s;
@@ -264,7 +272,7 @@ static int remove_redundant_snapshot(struct snapshot_list *sl)
 				victim->name, victim->interval);
 			continue;
 		}
-		ret = remove_snapshot(victim);
+		ret = remove_snapshot(victim, "redundant");
 		return ret < 0? ret : 1;
 	}
 	return 0;
@@ -278,6 +286,8 @@ static int remove_outdated_snapshot(struct snapshot_list *sl)
 	DSS_DEBUG_LOG("looking for snapshots belonging to intervals greater than %d\n",
 		conf.num_intervals_arg);
 	FOR_EACH_SNAPSHOT(s, i, sl) {
+		if (snapshot_is_being_created(s))
+			continue;
 		if (s->interval <= conf.num_intervals_arg)
 			continue;
 		if (conf.dry_run_given) {
@@ -285,7 +295,7 @@ static int remove_outdated_snapshot(struct snapshot_list *sl)
 				s->name, s->interval);
 			continue;
 		}
-		ret = remove_snapshot(s);
+		ret = remove_snapshot(s, "outdated");
 		if (ret < 0)
 			return ret;
 		return 1;
@@ -300,9 +310,9 @@ static int remove_oldest_snapshot(struct snapshot_list *sl)
 	if (!s) /* no snapshot found */
 		return 0;
 	DSS_INFO_LOG("oldest snapshot: %s\n", s->name);
-	if (s->creation_time == current_snapshot_creation_time)
-		return 0; /* do not remove the snapshot currently being created */
-	return remove_snapshot(s);
+	if (snapshot_is_being_created(s))
+		return 0;
+	return remove_snapshot(s, "oldest");
 }
 
 static int rename_incomplete_snapshot(int64_t start)
