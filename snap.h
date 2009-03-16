@@ -40,7 +40,7 @@ enum snapshot_status_flags {
 	SS_BEING_DELETED = 2,
 };
 
-/** Desribes one snapshot */
+/** Describes one snapshot. */
 struct snapshot {
 	/** The name of the directory, relative to the destination dir. */
 	char *name;
