@@ -40,18 +40,14 @@ static struct gengetopt_args_info conf;
 static FILE *logfile;
 /** The read end of the signal pipe */
 static int signal_pipe;
-/** Process id of current rsync process. */
-static pid_t rsync_pid;
-/** Whether the rsync process is currently stopped */
-static int rsync_stopped;
+/** Process id of current pre-create-hook/rsync/post-create-hook process. */
+static pid_t create_pid;
+/** Whether the pre-create-hook/rsync/post-create-hook is currently stopped. */
+static int create_process_stopped;
 /** Process id of current rm process. */
 static pid_t rm_pid;
 /** When the next snapshot is due. */
 static struct timeval next_snapshot_time;
-/** The pid of the pre-create hook. */
-static pid_t pre_create_hook_pid;
-/** The pid of the post-create hook. */
-static pid_t post_create_hook_pid;
 /** Creation time of the snapshot currently being created. */
 static int64_t current_snapshot_creation_time;
 /** Needed by the post-create hook. */
@@ -372,7 +368,7 @@ static int pre_create_hook(void)
 		return 0;
 	}
 	DSS_NOTICE_LOG("executing %s\n", conf.pre_create_hook_arg);
-	ret = dss_exec_cmdline_pid(&pre_create_hook_pid,
+	ret = dss_exec_cmdline_pid(&create_pid,
 		conf.pre_create_hook_arg, fds);
 	if (ret < 0)
 		return ret;
@@ -393,7 +389,7 @@ static int post_create_hook(void)
 	cmd = make_message("%s %s/%s", conf.post_create_hook_arg,
 		conf.dest_dir_arg, path_to_last_complete_snapshot);
 	DSS_NOTICE_LOG("executing %s\n", cmd);
-	ret = dss_exec_cmdline_pid(&post_create_hook_pid, cmd, fds);
+	ret = dss_exec_cmdline_pid(&create_pid, cmd, fds);
 	free(cmd);
 	if (ret < 0)
 		return ret;
@@ -409,22 +405,21 @@ static void kill_process(pid_t pid)
 	kill(pid, SIGTERM);
 }
 
-static void stop_rsync_process(void)
+static void stop_create_process(void)
 {
-	if (!rsync_pid || rsync_stopped)
+	if (!create_pid || create_process_stopped)
 		return;
-	kill(SIGSTOP, rsync_pid);
-	rsync_stopped = 1;
+	kill(SIGSTOP, create_pid);
+	create_process_stopped = 1;
 }
 
-static void restart_rsync_process(void)
+static void restart_create_process(void)
 {
-	if (!rsync_pid || !rsync_stopped)
+	if (!create_pid || !create_process_stopped)
 		return;
-	kill (SIGCONT, rsync_pid);
-	rsync_stopped = 0;
+	kill (SIGCONT, create_pid);
+	create_process_stopped = 0;
 }
-
 
 /**
  * Print a log message about the exit status of a child.
@@ -501,7 +496,7 @@ static int handle_rsync_exit(int status)
 	int es, ret;
 
 	if (!WIFEXITED(status)) {
-		DSS_ERROR_LOG("rsync process %d died involuntary\n", (int)rsync_pid);
+		DSS_ERROR_LOG("rsync process %d died involuntary\n", (int)create_pid);
 		ret = -E_INVOLUNTARY_EXIT;
 		snapshot_creation_status = SCS_READY;
 		compute_next_snapshot_time();
@@ -510,7 +505,7 @@ static int handle_rsync_exit(int status)
 	es = WEXITSTATUS(status);
 	if (es == 13) {	/* Errors with program diagnostics */
 		DSS_WARNING_LOG("rsync process %d returned %d -- restarting\n",
-			(int)rsync_pid, es);
+			(int)create_pid, es);
 		snapshot_creation_status = SCS_RSYNC_NEEDS_RESTART;
 		gettimeofday(&next_snapshot_time, NULL);
 		next_snapshot_time.tv_sec += 60;
@@ -518,7 +513,7 @@ static int handle_rsync_exit(int status)
 		goto out;
 	}
 	if (es != 0 && es != 23 && es != 24) {
-		DSS_ERROR_LOG("rsync process %d returned %d\n", (int)rsync_pid, es);
+		DSS_ERROR_LOG("rsync process %d returned %d\n", (int)create_pid, es);
 		ret = -E_BAD_EXIT_CODE;
 		snapshot_creation_status = SCS_READY;
 		compute_next_snapshot_time();
@@ -529,8 +524,8 @@ static int handle_rsync_exit(int status)
 		goto out;
 	snapshot_creation_status = SCS_RSYNC_SUCCESS;
 out:
-	rsync_pid = 0;
-	rsync_stopped = 0;
+	create_pid = 0;
+	create_process_stopped = 0;
 	return ret;
 }
 
@@ -554,7 +549,7 @@ static int handle_pre_create_hook_exit(int status)
 	snapshot_creation_status = SCS_PRE_HOOK_SUCCESS;
 	ret = 1;
 out:
-	pre_create_hook_pid = 0;
+	create_pid = 0;
 	return ret;
 }
 
@@ -565,17 +560,25 @@ static int handle_sigchld(void)
 
 	if (ret <= 0)
 		return ret;
-	if (pid == rsync_pid)
-		return handle_rsync_exit(status);
+
+	if (pid == create_pid) {
+		switch (snapshot_creation_status) {
+		case SCS_PRE_HOOK_RUNNING:
+			return handle_pre_create_hook_exit(status);
+		case SCS_RSYNC_RUNNING:
+			return handle_rsync_exit(status);
+		case SCS_POST_HOOK_RUNNING:
+			snapshot_creation_status = SCS_READY;
+			compute_next_snapshot_time();
+			return 1;
+		default:
+			DSS_EMERG_LOG("BUG: create can't die in status %d\n",
+				snapshot_creation_status);
+			return -E_BUG;
+		}
+	}
 	if (pid == rm_pid)
 		return handle_rm_exit(status);
-	if (pid == pre_create_hook_pid)
-		return handle_pre_create_hook_exit(status);
-	if (pid == post_create_hook_pid) {
-		snapshot_creation_status = SCS_READY;
-		compute_next_snapshot_time();
-		return 1;
-	}
 	DSS_EMERG_LOG("BUG: unknown process %d died\n", (int)pid);
 	return -E_BUG;
 }
@@ -696,8 +699,8 @@ static int handle_signal(void)
 	switch (sig) {
 	case SIGINT:
 	case SIGTERM:
-		restart_rsync_process();
-		kill_process(rsync_pid);
+		restart_create_process();
+		kill_process(create_pid);
 		kill_process(rm_pid);
 		ret = -E_SIGNAL;
 		break;
@@ -785,7 +788,7 @@ static int create_snapshot(char **argv)
 	name = incomplete_name(current_snapshot_creation_time);
 	DSS_NOTICE_LOG("creating new snapshot %s\n", name);
 	free(name);
-	ret = dss_exec(&rsync_pid, argv[0], argv, fds);
+	ret = dss_exec(&create_pid, argv[0], argv, fds);
 	if (ret < 0)
 		return ret;
 	snapshot_creation_status = SCS_RSYNC_RUNNING;
@@ -832,10 +835,10 @@ static int select_loop(void)
 		if (ret < 0)
 			goto out;
 		if (rm_pid) {
-			stop_rsync_process();
+			stop_create_process();
 			continue;
 		}
-		restart_rsync_process();
+		restart_create_process();
 		gettimeofday(&now, NULL);
 		if (tv_diff(&next_snapshot_time, &now, NULL) > 0)
 			continue;
@@ -967,8 +970,8 @@ static int com_create(void)
 	ret = pre_create_hook();
 	if (ret < 0)
 		return ret;
-	if (pre_create_hook_pid) {
-		ret = wait_for_process(pre_create_hook_pid, &status);
+	if (create_pid) {
+		ret = wait_for_process(create_pid, &status);
 		if (ret < 0)
 			return ret;
 		ret = handle_pre_create_hook_exit(status);
@@ -979,15 +982,15 @@ static int com_create(void)
 	ret = create_snapshot(rsync_argv);
 	if (ret < 0)
 		goto out;
-	ret = wait_for_process(rsync_pid, &status);
+	ret = wait_for_process(create_pid, &status);
 	if (ret < 0)
 		goto out;
 	ret = handle_rsync_exit(status);
 	if (ret < 0)
 		goto out;
 	post_create_hook();
-	if (post_create_hook_pid)
-		ret = wait_for_process(post_create_hook_pid, &status);
+	if (create_pid)
+		ret = wait_for_process(create_pid, &status);
 out:
 	free_rsync_argv(rsync_argv);
 	return ret;
