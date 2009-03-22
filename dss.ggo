@@ -195,8 +195,12 @@ string typestr="option"
 optional
 multiple
 details="
-	These option may be given multiple times. The arguments passed
-	to that option are passed verbatim to the rsync command.
+	This option may be given multiple times. The given argument is
+	passed verbatim to the rsync command. Note that in order to use
+	rsync options that require an argument, you have to specify the
+	option and its argument as separate --rsync-options, like this:
+
+		--rsync-option --exclude --rsync-option /proc
 "
 
 ###################
