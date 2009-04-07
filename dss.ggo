@@ -277,6 +277,37 @@ details="
 	store them in a database for further analysis.
 "
 
+option "pre-remove-hook" -
+#~~~~~~~~~~~~~~~~~~~~~~~~~~
+"Executed before snapshot removal"
+string typestr="command"
+optional
+details="
+	Execute this command before removing a snapshot. If this
+	command returns with a non-zero exit status, no snapshot is
+	being removed and the operation is retried later.
+
+	For example, one might want to execute a script that checks
+	whether the snapshot to be deleted is currently used by
+	another process, e.g. by a tape-based backup system that runs
+	concurrently to dss.
+
+	Another possible application of this is to record disk-usage
+	patterns before and after snapshot removal.
+"
+
+option "post-remove-hook" -
+#~~~~~~~~~~~~~~~~~~~~~~~~~~
+"Executed after snapshot removal"
+string typestr="command"
+optional
+details="
+	Execute this after a snapshot has successfully been
+	removed. The full path of the removed snapshot is
+	passed to the hook as the first argument. The exit code of
+	this hook is ignored.
+"
+
 option "exit-hook" e
 #~~~~~~~~~~~~~~~~~~~
 "Executed if run command exits"
