@@ -369,7 +369,7 @@ static int pre_create_hook(void)
 		snapshot_creation_status = SCS_PRE_HOOK_SUCCESS;
 		return 0;
 	}
-	DSS_NOTICE_LOG("executing %s\n", conf.pre_create_hook_arg);
+	DSS_DEBUG_LOG("executing %s\n", conf.pre_create_hook_arg);
 	ret = dss_exec_cmdline_pid(&create_pid,
 		conf.pre_create_hook_arg, fds);
 	if (ret < 0)
@@ -534,6 +534,7 @@ out:
 static int handle_pre_create_hook_exit(int status)
 {
 	int es, ret;
+	static int warn_count;
 
 	if (!WIFEXITED(status)) {
 		snapshot_creation_status = SCS_READY;
@@ -543,11 +544,18 @@ static int handle_pre_create_hook_exit(int status)
 	}
 	es = WEXITSTATUS(status);
 	if (es) {
+		if (!warn_count--) {
+			DSS_NOTICE_LOG("pre_create_hook %s returned %d\n",
+				conf.pre_create_hook_arg, es);
+			DSS_NOTICE_LOG("deferring snapshot creation...\n");
+			warn_count = 60; /* warn only once per hour */
+		}
 		snapshot_creation_status = SCS_READY;
 		compute_next_snapshot_time();
-		ret = -E_BAD_EXIT_CODE;
+		ret = 0;
 		goto out;
 	}
+	warn_count = 0;
 	snapshot_creation_status = SCS_PRE_HOOK_SUCCESS;
 	ret = 1;
 out:
