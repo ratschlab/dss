@@ -53,9 +53,9 @@ static int64_t current_snapshot_creation_time;
 /** Needed by the post-create hook. */
 static char *path_to_last_complete_snapshot;
 /** \sa \ref snap.h for details. */
-static unsigned snapshot_creation_status;
+enum hook_status snapshot_creation_status;
 /** \sa \ref snap.h for details. */
-static unsigned snapshot_removal_status;
+enum hook_status snapshot_removal_status;
 
 
 DEFINE_DSS_ERRLIST;
@@ -157,7 +157,7 @@ static void compute_next_snapshot_time(void)
 	struct snapshot *s = NULL;
 	struct snapshot_list sl;
 
-	assert(snapshot_creation_status == SCS_READY);
+	assert(snapshot_creation_status == HS_READY);
 	current_snapshot_creation_time = 0;
 	dss_get_snapshot_list(&sl);
 	FOR_EACH_SNAPSHOT(s, i, &sl) {
@@ -366,7 +366,7 @@ static int pre_create_hook(void)
 	int ret, fds[3] = {0, 0, 0};
 
 	if (!conf.pre_create_hook_given) {
-		snapshot_creation_status = SCS_PRE_HOOK_SUCCESS;
+		snapshot_creation_status = HS_PRE_SUCCESS;
 		return 0;
 	}
 	DSS_DEBUG_LOG("executing %s\n", conf.pre_create_hook_arg);
@@ -374,7 +374,7 @@ static int pre_create_hook(void)
 		conf.pre_create_hook_arg, fds);
 	if (ret < 0)
 		return ret;
-	snapshot_creation_status = SCS_PRE_HOOK_RUNNING;
+	snapshot_creation_status = HS_PRE_RUNNING;
 	return ret;
 }
 
@@ -384,7 +384,7 @@ static int post_create_hook(void)
 	char *cmd;
 
 	if (!conf.post_create_hook_given) {
-		snapshot_creation_status = SCS_READY;
+		snapshot_creation_status = HS_READY;
 		compute_next_snapshot_time();
 		return 0;
 	}
@@ -395,7 +395,7 @@ static int post_create_hook(void)
 	free(cmd);
 	if (ret < 0)
 		return ret;
-	snapshot_creation_status = SCS_POST_HOOK_RUNNING;
+	snapshot_creation_status = HS_POST_RUNNING;
 	return ret;
 }
 
@@ -500,7 +500,7 @@ static int handle_rsync_exit(int status)
 	if (!WIFEXITED(status)) {
 		DSS_ERROR_LOG("rsync process %d died involuntary\n", (int)create_pid);
 		ret = -E_INVOLUNTARY_EXIT;
-		snapshot_creation_status = SCS_READY;
+		snapshot_creation_status = HS_READY;
 		compute_next_snapshot_time();
 		goto out;
 	}
@@ -508,7 +508,7 @@ static int handle_rsync_exit(int status)
 	if (es == 13) {	/* Errors with program diagnostics */
 		DSS_WARNING_LOG("rsync process %d returned %d -- restarting\n",
 			(int)create_pid, es);
-		snapshot_creation_status = SCS_RSYNC_NEEDS_RESTART;
+		snapshot_creation_status = HS_NEEDS_RESTART;
 		gettimeofday(&next_snapshot_time, NULL);
 		next_snapshot_time.tv_sec += 60;
 		ret = 1;
@@ -517,14 +517,14 @@ static int handle_rsync_exit(int status)
 	if (es != 0 && es != 23 && es != 24) {
 		DSS_ERROR_LOG("rsync process %d returned %d\n", (int)create_pid, es);
 		ret = -E_BAD_EXIT_CODE;
-		snapshot_creation_status = SCS_READY;
+		snapshot_creation_status = HS_READY;
 		compute_next_snapshot_time();
 		goto out;
 	}
 	ret = rename_incomplete_snapshot(current_snapshot_creation_time);
 	if (ret < 0)
 		goto out;
-	snapshot_creation_status = SCS_RSYNC_SUCCESS;
+	snapshot_creation_status = HS_SUCCESS;
 out:
 	create_pid = 0;
 	create_process_stopped = 0;
@@ -537,7 +537,7 @@ static int handle_pre_create_hook_exit(int status)
 	static int warn_count;
 
 	if (!WIFEXITED(status)) {
-		snapshot_creation_status = SCS_READY;
+		snapshot_creation_status = HS_READY;
 		compute_next_snapshot_time();
 		ret = -E_INVOLUNTARY_EXIT;
 		goto out;
@@ -550,13 +550,13 @@ static int handle_pre_create_hook_exit(int status)
 			DSS_NOTICE_LOG("deferring snapshot creation...\n");
 			warn_count = 60; /* warn only once per hour */
 		}
-		snapshot_creation_status = SCS_READY;
+		snapshot_creation_status = HS_READY;
 		compute_next_snapshot_time();
 		ret = 0;
 		goto out;
 	}
 	warn_count = 0;
-	snapshot_creation_status = SCS_PRE_HOOK_SUCCESS;
+	snapshot_creation_status = HS_PRE_SUCCESS;
 	ret = 1;
 out:
 	create_pid = 0;
@@ -573,12 +573,12 @@ static int handle_sigchld(void)
 
 	if (pid == create_pid) {
 		switch (snapshot_creation_status) {
-		case SCS_PRE_HOOK_RUNNING:
+		case HS_PRE_RUNNING:
 			return handle_pre_create_hook_exit(status);
-		case SCS_RSYNC_RUNNING:
+		case HS_RUNNING:
 			return handle_rsync_exit(status);
-		case SCS_POST_HOOK_RUNNING:
-			snapshot_creation_status = SCS_READY;
+		case HS_POST_RUNNING:
+			snapshot_creation_status = HS_READY;
 			compute_next_snapshot_time();
 			return 1;
 		default:
@@ -801,7 +801,7 @@ static int create_snapshot(char **argv)
 	ret = dss_exec(&create_pid, argv[0], argv, fds);
 	if (ret < 0)
 		return ret;
-	snapshot_creation_status = SCS_RSYNC_RUNNING;
+	snapshot_creation_status = HS_RUNNING;
 	return ret;
 }
 
@@ -853,33 +853,33 @@ static int select_loop(void)
 		if (tv_diff(&next_snapshot_time, &now, NULL) > 0)
 			continue;
 		switch (snapshot_creation_status) {
-		case SCS_READY:
+		case HS_READY:
 			ret = pre_create_hook();
 			if (ret < 0)
 				goto out;
 			continue;
-		case SCS_PRE_HOOK_RUNNING:
+		case HS_PRE_RUNNING:
 			continue;
-		case SCS_RSYNC_NEEDS_RESTART:
+		case HS_NEEDS_RESTART:
 			ret = create_snapshot(rsync_argv);
 			if (ret < 0)
 				goto out;
 			continue;
-		case SCS_PRE_HOOK_SUCCESS:
+		case HS_PRE_SUCCESS:
 			free_rsync_argv(rsync_argv);
 			create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
 			ret = create_snapshot(rsync_argv);
 			if (ret < 0)
 				goto out;
 			continue;
-		case SCS_RSYNC_RUNNING:
+		case HS_RUNNING:
 			continue;
-		case SCS_RSYNC_SUCCESS:
+		case HS_SUCCESS:
 			ret = post_create_hook();
 			if (ret < 0)
 				goto out;
 			continue;
-		case SCS_POST_HOOK_RUNNING:
+		case HS_POST_RUNNING:
 			continue;
 		}
 	}

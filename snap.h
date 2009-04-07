@@ -4,36 +4,22 @@
  * Licensed under the GPL v2. For licencing details see COPYING.
  */
 
-/** The state of snapshot creation. */
-enum {
+/** The possible states for snapshot creation/removal. */
+enum hook_status {
 	/** We are ready to take the next snapshot. */
-	SCS_READY,
-	/** The pre-creation hook has been started. */
-	SCS_PRE_HOOK_RUNNING,
-	/** The pre-creation hook exited successfully. */
-	SCS_PRE_HOOK_SUCCESS,
-	/** The rsync process is running. */
-	SCS_RSYNC_RUNNING,
-	/** The rsync process exited successfully. */
-	SCS_RSYNC_SUCCESS,
-	/** The rsync process needs to be restarted. */
-	SCS_RSYNC_NEEDS_RESTART,
-	/** The post-create hook has been started. */
-	SCS_POST_HOOK_RUNNING,
-};
-
-/** The state of snapshot removal. */
-enum {
-	/** No snapshot is currently being removed. */
-	SRS_READY,
-	/** The pre-removal hook has been started. */
-	SRS_PRE_HOOK_RUNNING,
-	/** The pre-remove hook failed, we're waiting to execute it again. */
-	SRS_PRE_HOOK_FAILURE,
-	/** The rm command is currently executing. */
-	SRS_RM_RUNNING,
-	/** The post-remove hook ist running. */
-	SRS_POST_HOOK_RUNNING,
+	HS_READY,
+	/** The pre-create/pre-remove hook has been started. */
+	HS_PRE_RUNNING,
+	/** The pre-create/pre-remove hook exited successfully. */
+	HS_PRE_SUCCESS,
+	/** The rsync/rm process is running. */
+	HS_RUNNING,
+	/** The rsync/rm process exited successfully. */
+	HS_SUCCESS,
+	/** The rsync/rm process needs to be restarted. */
+	HS_NEEDS_RESTART,
+	/** The post-create/post-remove hook has been started. */
+	HS_POST_RUNNING,
 };
 
 /**
