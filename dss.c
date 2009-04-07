@@ -44,8 +44,8 @@ static int signal_pipe;
 static pid_t create_pid;
 /** Whether the pre-create-hook/rsync/post-create-hook is currently stopped. */
 static int create_process_stopped;
-/** Process id of current rm process. */
-static pid_t rm_pid;
+/** Process id of current pre-remove/rm/post-remove process. */
+static pid_t remove_pid;
 /** When the next snapshot is due. */
 static struct timeval next_snapshot_time;
 /** Creation time of the snapshot currently being created. */
@@ -193,7 +193,7 @@ out:
 static int remove_snapshot(struct snapshot *s, char *why)
 {
 	int fds[3] = {0, 0, 0};
-	assert(!rm_pid);
+	assert(!remove_pid);
 	char *new_name = being_deleted_name(s);
 	int ret = dss_rename(s->name, new_name);
 	char *argv[] = {"rm", "-rf", new_name, NULL};
@@ -202,7 +202,7 @@ static int remove_snapshot(struct snapshot *s, char *why)
 		goto out;
 	DSS_NOTICE_LOG("removing %s snapshot %s (interval = %i)\n",
 		why, s->name, s->interval);
-	ret = dss_exec(&rm_pid, argv[0], argv, fds);
+	ret = dss_exec(&remove_pid, argv[0], argv, fds);
 out:
 	free(new_name);
 	return ret;
@@ -476,7 +476,7 @@ static int wait_for_process(pid_t pid, int *status)
 
 static int handle_rm_exit(int status)
 {
-	rm_pid = 0;
+	remove_pid = 0;
 	if (!WIFEXITED(status))
 		return -E_INVOLUNTARY_EXIT;
 	if (WEXITSTATUS(status))
@@ -486,7 +486,7 @@ static int handle_rm_exit(int status)
 
 static int wait_for_rm_process(void)
 {
-	int status, ret = wait_for_process(rm_pid, &status);
+	int status, ret = wait_for_process(remove_pid, &status);
 
 	if (ret < 0)
 		return ret;
@@ -587,7 +587,7 @@ static int handle_sigchld(void)
 			return -E_BUG;
 		}
 	}
-	if (pid == rm_pid)
+	if (pid == remove_pid)
 		return handle_rm_exit(status);
 	DSS_EMERG_LOG("BUG: unknown process %d died\n", (int)pid);
 	return -E_BUG;
@@ -711,7 +711,7 @@ static int handle_signal(void)
 	case SIGTERM:
 		restart_create_process();
 		kill_process(create_pid);
-		kill_process(rm_pid);
+		kill_process(remove_pid);
 		ret = -E_SIGNAL;
 		break;
 	case SIGHUP:
@@ -817,7 +817,7 @@ static int select_loop(void)
 		int low_disk_space;
 		struct timeval now, *tvp;
 
-		if (rm_pid)
+		if (remove_pid)
 			tvp = NULL; /* sleep until rm process dies */
 		else { /* sleep one minute */
 			tv.tv_sec = 60;
@@ -835,7 +835,7 @@ static int select_loop(void)
 			if (ret < 0)
 				goto out;
 		}
-		if (rm_pid)
+		if (remove_pid)
 			continue;
 		ret = disk_space_low();
 		if (ret < 0)
@@ -844,7 +844,7 @@ static int select_loop(void)
 		ret = try_to_free_disk_space(low_disk_space);
 		if (ret < 0)
 			goto out;
-		if (rm_pid) {
+		if (remove_pid) {
 			stop_create_process();
 			continue;
 		}
