@@ -983,7 +983,7 @@ static int com_create(void)
 		if (ret < 0)
 			return ret;
 		ret = handle_pre_create_hook_exit(status);
-		if (ret < 0)
+		if (ret <= 0) /* error, or pre-create failed */
 			return ret;
 	}
 	create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
