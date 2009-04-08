@@ -48,8 +48,12 @@ static int create_process_stopped;
 static pid_t remove_pid;
 /** When the next snapshot is due. */
 static struct timeval next_snapshot_time;
+/** When to try to remove something. */
+static struct timeval next_removal_check;
 /** Creation time of the snapshot currently being created. */
 static int64_t current_snapshot_creation_time;
+/* The snapshot currently being removed. */
+struct snapshot *snapshot_currently_being_removed;
 /** Needed by the post-create hook. */
 static char *path_to_last_complete_snapshot;
 /** \sa \ref snap.h for details. */
@@ -146,7 +150,7 @@ static void dss_get_snapshot_list(struct snapshot_list *sl)
 	get_snapshot_list(sl, conf.unit_interval_arg, conf.num_intervals_arg);
 }
 
-static void compute_next_snapshot_time(void)
+static int next_snapshot_is_due(void)
 {
 	struct timeval now, unit_interval = {.tv_sec = 24 * 3600 * conf.unit_interval_arg},
 		tmp, diff;
@@ -157,6 +161,9 @@ static void compute_next_snapshot_time(void)
 	struct snapshot *s = NULL;
 	struct snapshot_list sl;
 
+	gettimeofday(&now, NULL);
+	if (tv_diff(&next_snapshot_time, &now, NULL) > 0)
+		return 0;
 	assert(snapshot_creation_status == HS_READY);
 	current_snapshot_creation_time = 0;
 	dss_get_snapshot_list(&sl);
@@ -173,36 +180,93 @@ static void compute_next_snapshot_time(void)
 	tmp.tv_sec = x;
 	tmp.tv_usec = 0;
 	ret = tv_diff(&unit_interval, &tmp, &diff); /* total sleep time per unit interval */
-	if (ret < 0 || !s) /* unit_interval < tmp or no snapshot */
-		goto min_sleep;
+	if (ret < 0 || !s) { /* unit_interval < tmp or no snapshot */
+		ret = 1;
+		goto out;
+	}
+
 	tv_divide(wanted, &diff, &tmp); /* sleep time betweeen two snapshots */
 	diff.tv_sec = s->completion_time; /* completion time of the the latest snaphot */
 	diff.tv_usec = 0;
 	tv_add(&diff, &tmp, &next_snapshot_time);
-	gettimeofday(&now, NULL);
-	if (tv_diff(&now, &next_snapshot_time, NULL) < 0)
-		goto out;
-min_sleep:
-	next_snapshot_time = now;
-	next_snapshot_time.tv_sec += 60;
+	ret = (tv_diff(&now, &next_snapshot_time, &diff) < 0)? 0 : 1;
 out:
 	free_snapshot_list(&sl);
+	if (ret == 0)
+		DSS_DEBUG_LOG("next snapshot due in %lu seconds\n",
+			tv2ms(&diff) / 1000);
+	else
+		DSS_DEBUG_LOG("next snapshot: now\n");
+	return ret;
 }
 
-
-static int remove_snapshot(struct snapshot *s, char *why)
+static int pre_create_hook(void)
 {
-	int fds[3] = {0, 0, 0};
-	assert(!remove_pid);
-	char *new_name = being_deleted_name(s);
-	int ret = dss_rename(s->name, new_name);
-	char *argv[] = {"rm", "-rf", new_name, NULL};
+	int ret, fds[3] = {0, 0, 0};
 
+	assert(snapshot_creation_status == HS_READY);
+	if (!conf.pre_create_hook_given) {
+		snapshot_creation_status = HS_PRE_SUCCESS;
+		return 0;
+	}
+	DSS_DEBUG_LOG("executing %s\n", conf.pre_create_hook_arg);
+	ret = dss_exec_cmdline_pid(&create_pid,
+		conf.pre_create_hook_arg, fds);
+	if (ret < 0)
+		return ret;
+	snapshot_creation_status = HS_PRE_RUNNING;
+	return ret;
+}
+
+static int pre_remove_hook(struct snapshot *s, char *why)
+{
+	int ret, fds[3] = {0, 0, 0};
+	char *cmd;
+
+	DSS_DEBUG_LOG("%s snapshot %s\n", why, s->name);
+	assert(snapshot_removal_status == HS_READY);
+	assert(remove_pid == 0);
+	assert(!snapshot_currently_being_removed);
+
+	snapshot_currently_being_removed = dss_malloc(sizeof(struct snapshot));
+	*snapshot_currently_being_removed = *s;
+	snapshot_currently_being_removed->name = dss_strdup(s->name);
+
+	if (!conf.pre_remove_hook_given) {
+		snapshot_removal_status = HS_PRE_SUCCESS;
+		return 0;
+	}
+	cmd = make_message("%s %s/%s", conf.pre_remove_hook_arg,
+		conf.dest_dir_arg, s->name);
+	DSS_DEBUG_LOG("executing %s\n", cmd);
+	ret = dss_exec_cmdline_pid(&remove_pid,
+		conf.pre_remove_hook_arg, fds);
+	free(cmd);
+	if (ret < 0)
+		return ret;
+	snapshot_removal_status = HS_PRE_RUNNING;
+	return ret;
+}
+
+static int exec_rm(void)
+{
+	struct snapshot *s = snapshot_currently_being_removed;
+	int fds[3] = {0, 0, 0};
+	char *new_name = being_deleted_name(s);
+	char *argv[] = {"rm", "-rf", new_name, NULL};
+	int ret;
+
+	assert(snapshot_removal_status == HS_PRE_SUCCESS);
+	assert(remove_pid == 0);
+
+	DSS_NOTICE_LOG("removing %s (interval = %i)\n", s->name, s->interval);
+	ret = dss_rename(s->name, new_name);
 	if (ret < 0)
 		goto out;
-	DSS_NOTICE_LOG("removing %s snapshot %s (interval = %i)\n",
-		why, s->name, s->interval);
 	ret = dss_exec(&remove_pid, argv[0], argv, fds);
+	if (ret < 0)
+		goto out;
+	snapshot_removal_status = HS_RUNNING;
 out:
 	free(new_name);
 	return ret;
@@ -270,7 +334,7 @@ static int remove_redundant_snapshot(struct snapshot_list *sl)
 				victim->name, victim->interval);
 			continue;
 		}
-		ret = remove_snapshot(victim, "redundant");
+		ret = pre_remove_hook(victim, "redundant");
 		return ret < 0? ret : 1;
 	}
 	return 0;
@@ -293,7 +357,7 @@ static int remove_outdated_snapshot(struct snapshot_list *sl)
 				s->name, s->interval);
 			continue;
 		}
-		ret = remove_snapshot(s, "outdated");
+		ret = pre_remove_hook(s, "outdated");
 		if (ret < 0)
 			return ret;
 		return 1;
@@ -310,7 +374,7 @@ static int remove_oldest_snapshot(struct snapshot_list *sl)
 	DSS_INFO_LOG("oldest snapshot: %s\n", s->name);
 	if (snapshot_is_being_created(s))
 		return 0;
-	return remove_snapshot(s, "oldest");
+	return pre_remove_hook(s, "oldest");
 }
 
 static int rename_incomplete_snapshot(int64_t start)
@@ -336,7 +400,11 @@ static int try_to_free_disk_space(int low_disk_space)
 {
 	int ret;
 	struct snapshot_list sl;
+	struct timeval now;
 
+	gettimeofday(&now, NULL);
+	if (tv_diff(&next_removal_check, &now, NULL) > 0)
+		return 0;
 	if (!low_disk_space && conf.keep_redundant_given)
 		return 0;
 	dss_get_snapshot_list(&sl);
@@ -361,23 +429,6 @@ out:
 	return ret;
 }
 
-static int pre_create_hook(void)
-{
-	int ret, fds[3] = {0, 0, 0};
-
-	if (!conf.pre_create_hook_given) {
-		snapshot_creation_status = HS_PRE_SUCCESS;
-		return 0;
-	}
-	DSS_DEBUG_LOG("executing %s\n", conf.pre_create_hook_arg);
-	ret = dss_exec_cmdline_pid(&create_pid,
-		conf.pre_create_hook_arg, fds);
-	if (ret < 0)
-		return ret;
-	snapshot_creation_status = HS_PRE_RUNNING;
-	return ret;
-}
-
 static int post_create_hook(void)
 {
 	int ret, fds[3] = {0, 0, 0};
@@ -385,7 +436,6 @@ static int post_create_hook(void)
 
 	if (!conf.post_create_hook_given) {
 		snapshot_creation_status = HS_READY;
-		compute_next_snapshot_time();
 		return 0;
 	}
 	cmd = make_message("%s %s/%s", conf.post_create_hook_arg,
@@ -396,6 +446,29 @@ static int post_create_hook(void)
 	if (ret < 0)
 		return ret;
 	snapshot_creation_status = HS_POST_RUNNING;
+	return ret;
+}
+
+static int post_remove_hook(void)
+{
+	int ret, fds[3] = {0, 0, 0};
+	char *cmd;
+	struct snapshot *s = snapshot_currently_being_removed;
+
+	assert(s);
+
+	if (!conf.post_remove_hook_given) {
+		snapshot_removal_status = HS_READY;
+		return 0;
+	}
+	cmd = make_message("%s %s/%s", conf.post_remove_hook_arg,
+		conf.dest_dir_arg, s->name);
+	DSS_NOTICE_LOG("executing %s\n", cmd);
+	ret = dss_exec_cmdline_pid(&remove_pid, cmd, fds);
+	free(cmd);
+	if (ret < 0)
+		return ret;
+	snapshot_removal_status = HS_POST_RUNNING;
 	return ret;
 }
 
@@ -474,23 +547,80 @@ static int wait_for_process(pid_t pid, int *status)
 	return ret;
 }
 
+static void handle_pre_remove_exit(int status)
+{
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+		snapshot_removal_status = HS_READY;
+		gettimeofday(&next_removal_check, NULL);
+		next_removal_check.tv_sec += 60;
+		return;
+	}
+	snapshot_removal_status = HS_PRE_SUCCESS;
+}
+
 static int handle_rm_exit(int status)
 {
-	remove_pid = 0;
-	if (!WIFEXITED(status))
+	if (!WIFEXITED(status)) {
+		snapshot_removal_status = HS_READY;
 		return -E_INVOLUNTARY_EXIT;
-	if (WEXITSTATUS(status))
+	}
+	if (WEXITSTATUS(status)) {
+		snapshot_removal_status = HS_READY;
 		return -E_BAD_EXIT_CODE;
+	}
+	snapshot_removal_status = HS_SUCCESS;
 	return 1;
 }
 
-static int wait_for_rm_process(void)
+static void handle_post_remove_exit(void)
 {
-	int status, ret = wait_for_process(remove_pid, &status);
+	snapshot_removal_status = HS_READY;
+}
 
+static int handle_remove_exit(int status)
+{
+	int ret;
+	struct snapshot *s = snapshot_currently_being_removed;
+
+	assert(s);
+	switch (snapshot_removal_status) {
+	case HS_PRE_RUNNING:
+		handle_pre_remove_exit(status);
+		ret = 1;
+		break;
+	case HS_RUNNING:
+		ret = handle_rm_exit(status);
+		break;
+	case HS_POST_RUNNING:
+		handle_post_remove_exit();
+		ret = 1;
+		break;
+	default:
+		ret = -E_BUG;
+	}
+	if (snapshot_removal_status == HS_READY) {
+		free(s->name);
+		free(s);
+		snapshot_currently_being_removed = NULL;
+	}
+	remove_pid = 0;
+	return ret;
+}
+
+static int wait_for_remove_process(void)
+{
+	int status, ret;
+
+	assert(remove_pid);
+	assert(
+		snapshot_removal_status == HS_PRE_RUNNING ||
+		snapshot_removal_status == HS_RUNNING ||
+		snapshot_removal_status == HS_POST_RUNNING
+	);
+	ret = wait_for_process(remove_pid, &status);
 	if (ret < 0)
 		return ret;
-	return handle_rm_exit(status);
+	return handle_remove_exit(status);
 }
 
 static int handle_rsync_exit(int status)
@@ -501,7 +631,6 @@ static int handle_rsync_exit(int status)
 		DSS_ERROR_LOG("rsync process %d died involuntary\n", (int)create_pid);
 		ret = -E_INVOLUNTARY_EXIT;
 		snapshot_creation_status = HS_READY;
-		compute_next_snapshot_time();
 		goto out;
 	}
 	es = WEXITSTATUS(status);
@@ -518,7 +647,6 @@ static int handle_rsync_exit(int status)
 		DSS_ERROR_LOG("rsync process %d returned %d\n", (int)create_pid, es);
 		ret = -E_BAD_EXIT_CODE;
 		snapshot_creation_status = HS_READY;
-		compute_next_snapshot_time();
 		goto out;
 	}
 	ret = rename_incomplete_snapshot(current_snapshot_creation_time);
@@ -538,7 +666,6 @@ static int handle_pre_create_hook_exit(int status)
 
 	if (!WIFEXITED(status)) {
 		snapshot_creation_status = HS_READY;
-		compute_next_snapshot_time();
 		ret = -E_INVOLUNTARY_EXIT;
 		goto out;
 	}
@@ -551,7 +678,6 @@ static int handle_pre_create_hook_exit(int status)
 			warn_count = 60; /* warn only once per hour */
 		}
 		snapshot_creation_status = HS_READY;
-		compute_next_snapshot_time();
 		ret = 0;
 		goto out;
 	}
@@ -579,7 +705,6 @@ static int handle_sigchld(void)
 			return handle_rsync_exit(status);
 		case HS_POST_RUNNING:
 			snapshot_creation_status = HS_READY;
-			compute_next_snapshot_time();
 			return 1;
 		default:
 			DSS_EMERG_LOG("BUG: create can't die in status %d\n",
@@ -587,8 +712,12 @@ static int handle_sigchld(void)
 			return -E_BUG;
 		}
 	}
-	if (pid == remove_pid)
-		return handle_rm_exit(status);
+	if (pid == remove_pid) {
+		ret = handle_remove_exit(status);
+		if (ret < 0)
+			return ret;
+		return ret;
+	}
 	DSS_EMERG_LOG("BUG: unknown process %d died\n", (int)pid);
 	return -E_BUG;
 }
@@ -815,10 +944,10 @@ static int select_loop(void)
 	for (;;) {
 		fd_set rfds;
 		int low_disk_space;
-		struct timeval now, *tvp;
+		struct timeval *tvp;
 
 		if (remove_pid)
-			tvp = NULL; /* sleep until rm process dies */
+			tvp = NULL; /* sleep until rm hook/process dies */
 		else { /* sleep one minute */
 			tv.tv_sec = 60;
 			tv.tv_usec = 0;
@@ -837,6 +966,18 @@ static int select_loop(void)
 		}
 		if (remove_pid)
 			continue;
+		if (snapshot_removal_status == HS_PRE_SUCCESS) {
+			ret = exec_rm();
+			if (ret < 0)
+				goto out;
+			continue;
+		}
+		if (snapshot_removal_status == HS_SUCCESS) {
+			ret = post_remove_hook();
+			if (ret < 0)
+				goto out;
+			continue;
+		}
 		ret = disk_space_low();
 		if (ret < 0)
 			goto out;
@@ -844,42 +985,36 @@ static int select_loop(void)
 		ret = try_to_free_disk_space(low_disk_space);
 		if (ret < 0)
 			goto out;
-		if (remove_pid) {
+		if (snapshot_removal_status != HS_READY) {
 			stop_create_process();
 			continue;
 		}
 		restart_create_process();
-		gettimeofday(&now, NULL);
-		if (tv_diff(&next_snapshot_time, &now, NULL) > 0)
-			continue;
 		switch (snapshot_creation_status) {
 		case HS_READY:
+			if (!next_snapshot_is_due())
+				continue;
 			ret = pre_create_hook();
 			if (ret < 0)
 				goto out;
 			continue;
 		case HS_PRE_RUNNING:
+		case HS_RUNNING:
+		case HS_POST_RUNNING:
 			continue;
+		case HS_PRE_SUCCESS:
+			free_rsync_argv(rsync_argv);
+			create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
+			/* fall through */
 		case HS_NEEDS_RESTART:
 			ret = create_snapshot(rsync_argv);
 			if (ret < 0)
 				goto out;
 			continue;
-		case HS_PRE_SUCCESS:
-			free_rsync_argv(rsync_argv);
-			create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
-			ret = create_snapshot(rsync_argv);
-			if (ret < 0)
-				goto out;
-			continue;
-		case HS_RUNNING:
-			continue;
 		case HS_SUCCESS:
 			ret = post_create_hook();
 			if (ret < 0)
 				goto out;
-			continue;
-		case HS_POST_RUNNING:
 			continue;
 		}
 	}
@@ -910,7 +1045,6 @@ static int com_run(void)
 	ret = install_sighandler(SIGHUP);
 	if (ret < 0)
 		return ret;
-	compute_next_snapshot_time();
 	ret = select_loop();
 	if (ret >= 0) /* impossible */
 		ret = -E_BUG;
@@ -928,32 +1062,46 @@ static int com_prune(void)
 	if (ret < 0)
 		return ret;
 	log_disk_space(&ds);
-	for (;;) {
-		dss_get_snapshot_list(&sl);
-		ret = remove_outdated_snapshot(&sl);
-		free_snapshot_list(&sl);
-		if (ret < 0)
-			return ret;
-		if (!ret)
-			break;
-		ret = wait_for_rm_process();
-		if (ret < 0)
-			goto out;
-	}
-	for (;;) {
-		dss_get_snapshot_list(&sl);
-		ret = remove_redundant_snapshot(&sl);
-		free_snapshot_list(&sl);
-		if (ret < 0)
-			return ret;
-		if (!ret)
-			break;
-		ret = wait_for_rm_process();
+	dss_get_snapshot_list(&sl);
+	ret = remove_outdated_snapshot(&sl);
+	if (ret < 0)
+		goto out;
+	if (ret > 0)
+		goto rm;
+	ret = remove_redundant_snapshot(&sl);
+	if (ret < 0)
+		goto out;
+	if (ret > 0)
+		goto rm;
+	ret = 0;
+	goto out;
+rm:
+	if (snapshot_removal_status == HS_PRE_RUNNING) {
+		ret = wait_for_remove_process();
 		if (ret < 0)
 			goto out;
+		if (snapshot_removal_status != HS_PRE_SUCCESS)
+			goto out;
 	}
-	return 1;
+	ret = exec_rm();
+	if (ret < 0)
+		goto out;
+	ret = wait_for_remove_process();
+	if (ret < 0)
+		goto out;
+	if (snapshot_removal_status != HS_SUCCESS)
+		goto out;
+	ret = post_remove_hook();
+	if (ret < 0)
+		goto out;
+	if (snapshot_removal_status != HS_POST_RUNNING)
+		goto out;
+	ret = wait_for_remove_process();
+	if (ret < 0)
+		goto out;
+	ret = 1;
 out:
+	free_snapshot_list(&sl);
 	return ret;
 }
 
