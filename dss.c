@@ -568,7 +568,10 @@ static int handle_rm_exit(int status)
 		snapshot_removal_status = HS_READY;
 		return -E_BAD_EXIT_CODE;
 	}
-	snapshot_removal_status = HS_SUCCESS;
+	if (conf.post_remove_hook_given)
+		snapshot_removal_status = HS_SUCCESS;
+	else
+		snapshot_removal_status = HS_READY;
 	return 1;
 }
 
