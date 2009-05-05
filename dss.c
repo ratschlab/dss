@@ -367,6 +367,7 @@ static int remove_outdated_snapshot(struct snapshot_list *sl)
 
 static int remove_oldest_snapshot(struct snapshot_list *sl)
 {
+	int ret;
 	struct snapshot *s = get_oldest_snapshot(sl);
 
 	if (!s) /* no snapshot found */
@@ -374,7 +375,10 @@ static int remove_oldest_snapshot(struct snapshot_list *sl)
 	DSS_INFO_LOG("oldest snapshot: %s\n", s->name);
 	if (snapshot_is_being_created(s))
 		return 0;
-	return pre_remove_hook(s, "oldest");
+	ret = pre_remove_hook(s, "oldest");
+	if (ret < 0)
+		return ret;
+	return 1;
 }
 
 static int rename_incomplete_snapshot(int64_t start)
