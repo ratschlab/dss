@@ -641,7 +641,12 @@ static int handle_rsync_exit(int status)
 		goto out;
 	}
 	es = WEXITSTATUS(status);
-	if (es == 13) {	/* Errors with program diagnostics */
+	/*
+	 * Restart rsync on non-fatal errors:
+	 * 12: Error in rsync protocol data stream
+	 * 13: Errors with program diagnostics
+	 */
+	if (es == 12 || es == 13) {
 		DSS_WARNING_LOG("rsync process %d returned %d -- restarting\n",
 			(int)create_pid, es);
 		snapshot_creation_status = HS_NEEDS_RESTART;
