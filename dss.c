@@ -185,8 +185,8 @@ static int next_snapshot_is_due(void)
 		goto out;
 	}
 
-	tv_divide(wanted, &diff, &tmp); /* sleep time betweeen two snapshots */
-	diff.tv_sec = s->completion_time; /* completion time of the the latest snaphot */
+	tv_divide(wanted, &diff, &tmp); /* sleep time between two snapshots */
+	diff.tv_sec = s->completion_time; /* completion time of the latest snapshot */
 	diff.tv_usec = 0;
 	tv_add(&diff, &tmp, &next_snapshot_time);
 	ret = (tv_diff(&now, &next_snapshot_time, &diff) < 0)? 0 : 1;
