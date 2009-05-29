@@ -98,3 +98,13 @@ _static_inline_ struct snapshot *get_oldest_snapshot(struct snapshot_list *sl)
 		return NULL;
 	return sl->snapshots[0];
 }
+
+/**
+ * Get the newest snapshot in a snapshot list.
+ */
+_static_inline_ struct snapshot *get_newest_snapshot(struct snapshot_list *sl)
+{
+	if (!sl->num_snapshots)
+		return NULL;
+	return sl->snapshots[sl->num_snapshots - 1];
+}

@@ -277,6 +277,44 @@ static int snapshot_is_being_created(struct snapshot *s)
 	return s->creation_time == current_snapshot_creation_time;
 }
 
+static int remove_orphaned_snapshot(struct snapshot_list *sl)
+{
+	struct snapshot *s;
+	int i, ret;
+
+	DSS_DEBUG_LOG("looking for orphaned snapshots\n");
+	FOR_EACH_SNAPSHOT(s, i, sl) {
+		if (snapshot_is_being_created(s))
+			continue;
+		/*
+		 * We know that no rm is currently running, so if s is marked
+		 * as being deleted, a previously started rm must have failed.
+		 */
+		if (s->flags & SS_BEING_DELETED)
+			goto remove;
+
+		if (s->flags & SS_COMPLETE) /* good snapshot */
+			continue;
+		/*
+		 * This snapshot is incomplete and it is not the snapshot
+		 * currently being created. However, we must not remove it if
+		 * rsync is about to be restarted. As only the newest snapshot
+		 * can be restarted, this snapshot is orphaned if it is not the
+		 * newest snapshot or if we are not about to restart rsync.
+		 */
+		if (get_newest_snapshot(sl) != s)
+			goto remove;
+		if (snapshot_creation_status != HS_NEEDS_RESTART)
+			goto remove;
+	}
+	return 0; /* no orphaned snapshots */
+remove:
+	ret = pre_remove_hook(s, "orphaned");
+	if (ret < 0)
+		return ret;
+	return 1;
+}
+
 /*
  * return: 0: no redundant snapshots, 1: rm process started, negative: error
  */
@@ -421,6 +459,9 @@ static int try_to_free_disk_space(int low_disk_space)
 		goto out;
 	ret = 0;
 	if (!low_disk_space)
+		goto out;
+	ret = remove_orphaned_snapshot(&sl);
+	if (ret)
 		goto out;
 	DSS_WARNING_LOG("disk space low and nothing obvious to remove\n");
 	ret = remove_oldest_snapshot(&sl);
