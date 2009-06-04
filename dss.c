@@ -218,11 +218,13 @@ static int pre_create_hook(void)
 	return ret;
 }
 
-static int pre_remove_hook(struct snapshot *s, char *why)
+static int pre_remove_hook(struct snapshot *s, const char *why)
 {
 	int ret, fds[3] = {0, 0, 0};
 	char *cmd;
 
+	if (!s)
+		return 0;
 	DSS_DEBUG_LOG("%s snapshot %s\n", why, s->name);
 	assert(snapshot_removal_status == HS_READY);
 	assert(remove_pid == 0);
@@ -277,10 +279,10 @@ static int snapshot_is_being_created(struct snapshot *s)
 	return s->creation_time == current_snapshot_creation_time;
 }
 
-static int remove_orphaned_snapshot(struct snapshot_list *sl)
+static struct snapshot *find_orphaned_snapshot(struct snapshot_list *sl)
 {
 	struct snapshot *s;
-	int i, ret;
+	int i;
 
 	DSS_DEBUG_LOG("looking for orphaned snapshots\n");
 	FOR_EACH_SNAPSHOT(s, i, sl) {
@@ -291,7 +293,7 @@ static int remove_orphaned_snapshot(struct snapshot_list *sl)
 		 * as being deleted, a previously started rm must have failed.
 		 */
 		if (s->flags & SS_BEING_DELETED)
-			goto remove;
+			return s;
 
 		if (s->flags & SS_COMPLETE) /* good snapshot */
 			continue;
@@ -303,24 +305,20 @@ static int remove_orphaned_snapshot(struct snapshot_list *sl)
 		 * newest snapshot or if we are not about to restart rsync.
 		 */
 		if (get_newest_snapshot(sl) != s)
-			goto remove;
+			return s;
 		if (snapshot_creation_status != HS_NEEDS_RESTART)
-			goto remove;
+			return s;
 	}
-	return 0; /* no orphaned snapshots */
-remove:
-	ret = pre_remove_hook(s, "orphaned");
-	if (ret < 0)
-		return ret;
-	return 1;
+	/* no orphaned snapshots */
+	return NULL;
 }
 
 /*
  * return: 0: no redundant snapshots, 1: rm process started, negative: error
  */
-static int remove_redundant_snapshot(struct snapshot_list *sl)
+static struct snapshot *find_redundant_snapshot(struct snapshot_list *sl)
 {
-	int ret, i, interval;
+	int i, interval;
 	struct snapshot *s;
 	unsigned missing = 0;
 
@@ -367,20 +365,14 @@ static int remove_redundant_snapshot(struct snapshot_list *sl)
 			prev = s;
 		}
 		assert(victim);
-		if (conf.dry_run_given) {
-			dss_msg("%s would be removed (interval = %i)\n",
-				victim->name, victim->interval);
-			continue;
-		}
-		ret = pre_remove_hook(victim, "redundant");
-		return ret < 0? ret : 1;
+		return victim;
 	}
-	return 0;
+	return NULL;
 }
 
-static int remove_outdated_snapshot(struct snapshot_list *sl)
+static struct snapshot *find_outdated_snapshot(struct snapshot_list *sl)
 {
-	int i, ret;
+	int i;
 	struct snapshot *s;
 
 	DSS_DEBUG_LOG("looking for snapshots belonging to intervals greater than %d\n",
@@ -390,33 +382,21 @@ static int remove_outdated_snapshot(struct snapshot_list *sl)
 			continue;
 		if (s->interval <= conf.num_intervals_arg)
 			continue;
-		if (conf.dry_run_given) {
-			dss_msg("%s would be removed (interval = %i)\n",
-				s->name, s->interval);
-			continue;
-		}
-		ret = pre_remove_hook(s, "outdated");
-		if (ret < 0)
-			return ret;
-		return 1;
+		return s;
 	}
-	return 0;
+	return NULL;
 }
 
-static int remove_oldest_snapshot(struct snapshot_list *sl)
+struct snapshot *find_oldest_removable_snapshot(struct snapshot_list *sl)
 {
-	int ret;
 	struct snapshot *s = get_oldest_snapshot(sl);
 
 	if (!s) /* no snapshot found */
-		return 0;
+		return NULL;
 	DSS_INFO_LOG("oldest snapshot: %s\n", s->name);
 	if (snapshot_is_being_created(s))
-		return 0;
-	ret = pre_remove_hook(s, "oldest");
-	if (ret < 0)
-		return ret;
-	return 1;
+		return NULL;
+	return s;
 }
 
 static int rename_incomplete_snapshot(int64_t start)
@@ -442,7 +422,9 @@ static int try_to_free_disk_space(int low_disk_space)
 {
 	int ret;
 	struct snapshot_list sl;
+	struct snapshot *victim;
 	struct timeval now;
+	const char *why;
 
 	gettimeofday(&now, NULL);
 	if (tv_diff(&next_removal_check, &now, NULL) > 0)
@@ -450,25 +432,31 @@ static int try_to_free_disk_space(int low_disk_space)
 	if (!low_disk_space && conf.keep_redundant_given)
 		return 0;
 	dss_get_snapshot_list(&sl);
-	ret = remove_outdated_snapshot(&sl);
-	if (ret) /* error, or we are removing something */
-		goto out;
-	/* no outdated snapshot */
-	ret = remove_redundant_snapshot(&sl);
-	if (ret)
-		goto out;
+	why = "outdated";
+	victim = find_outdated_snapshot(&sl);
+	if (victim)
+		goto remove;
+	why = "redundant";
+	victim = find_redundant_snapshot(&sl);
+	if (victim)
+		goto remove;
+	/* try harder only if disk space is low */
 	ret = 0;
 	if (!low_disk_space)
 		goto out;
-	ret = remove_orphaned_snapshot(&sl);
-	if (ret)
+	why = "orphaned";
+	victim = find_orphaned_snapshot(&sl);
+	if (victim)
 		goto out;
 	DSS_WARNING_LOG("disk space low and nothing obvious to remove\n");
-	ret = remove_oldest_snapshot(&sl);
-	if (ret)
-		goto out;
+	victim = find_oldest_removable_snapshot(&sl);
+	if (victim)
+		goto remove;
 	DSS_CRIT_LOG("uhuhu: not enough disk space for a single snapshot\n");
 	ret = -ERRNO_TO_DSS_ERROR(ENOSPC);
+	goto out;
+remove:
+	ret = pre_remove_hook(victim, why);
 out:
 	free_snapshot_list(&sl);
 	return ret;
@@ -1109,26 +1097,35 @@ static int com_prune(void)
 {
 	int ret;
 	struct snapshot_list sl;
+	struct snapshot *victim;
 	struct disk_space ds;
+	const char *why;
 
 	ret = get_disk_space(".", &ds);
 	if (ret < 0)
 		return ret;
 	log_disk_space(&ds);
 	dss_get_snapshot_list(&sl);
-	ret = remove_outdated_snapshot(&sl);
-	if (ret < 0)
-		goto out;
-	if (ret > 0)
+	why = "outdated";
+	victim = find_outdated_snapshot(&sl);
+	if (victim)
 		goto rm;
-	ret = remove_redundant_snapshot(&sl);
-	if (ret < 0)
-		goto out;
-	if (ret > 0)
+	why = "redundant";
+	victim = find_redundant_snapshot(&sl);
+	if (victim)
 		goto rm;
 	ret = 0;
 	goto out;
 rm:
+	if (conf.dry_run_given) {
+		dss_msg("%s snapshot %s (interval = %i)\n",
+			why, victim->name, victim->interval);
+		ret = 0;
+		goto out;
+	}
+	ret = pre_remove_hook(victim, why);
+	if (ret < 0)
+		goto out;
 	if (snapshot_removal_status == HS_PRE_RUNNING) {
 		ret = wait_for_remove_process();
 		if (ret < 0)
