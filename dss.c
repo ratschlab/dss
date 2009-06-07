@@ -447,7 +447,7 @@ static int try_to_free_disk_space(int low_disk_space)
 	why = "orphaned";
 	victim = find_orphaned_snapshot(&sl);
 	if (victim)
-		goto out;
+		goto remove;
 	DSS_WARNING_LOG("disk space low and nothing obvious to remove\n");
 	victim = find_oldest_removable_snapshot(&sl);
 	if (victim)
