@@ -283,9 +283,11 @@ option "pre-remove-hook" -
 string typestr="command"
 optional
 details="
-	Execute this command before removing a snapshot. If this
-	command returns with a non-zero exit status, no snapshot is
-	being removed and the operation is retried later.
+	Execute this command before removing a snapshot. The full
+	path to the snapshot about to be deleted is passed to the
+	command as the first argument. If the command returns with
+	a non-zero exit status, no snapshot is being removed and the
+	operation is retried later.
 
 	For example, one might want to execute a script that checks
 	whether the snapshot to be deleted is currently used by
@@ -302,10 +304,10 @@ option "post-remove-hook" -
 string typestr="command"
 optional
 details="
-	Execute this after a snapshot has successfully been
-	removed. The full path of the removed snapshot is
-	passed to the hook as the first argument. The exit code of
-	this hook is ignored.
+	Execute this after a snapshot has successfully been removed. As
+	for the pre-remove hook, the full path of the removed snapshot
+	is passed to the hook as the first argument. The exit code
+	of this hook is ignored.
 "
 
 option "exit-hook" e
