@@ -432,6 +432,9 @@ static int try_to_free_disk_space(int low_disk_space)
 	if (!low_disk_space && conf.keep_redundant_given)
 		return 0;
 	dss_get_snapshot_list(&sl);
+	ret = 0;
+	if (!low_disk_space && sl.num_snapshots <= 1)
+		goto out;
 	why = "outdated";
 	victim = find_outdated_snapshot(&sl);
 	if (victim)
@@ -441,7 +444,6 @@ static int try_to_free_disk_space(int low_disk_space)
 	if (victim)
 		goto remove;
 	/* try harder only if disk space is low */
-	ret = 0;
 	if (!low_disk_space)
 		goto out;
 	why = "orphaned";
