@@ -718,6 +718,8 @@ static int handle_pre_create_hook_exit(int status)
 			DSS_NOTICE_LOG("deferring snapshot creation...\n");
 			warn_count = 60; /* warn only once per hour */
 		}
+		gettimeofday(&next_snapshot_time, NULL);
+		next_snapshot_time.tv_sec += 60;
 		snapshot_creation_status = HS_READY;
 		ret = 0;
 		goto out;
