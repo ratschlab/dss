@@ -52,10 +52,11 @@ static struct timeval next_snapshot_time;
 static struct timeval next_removal_check;
 /** Creation time of the snapshot currently being created. */
 static int64_t current_snapshot_creation_time;
-/* The snapshot currently being removed. */
+/** The snapshot currently being removed. */
 struct snapshot *snapshot_currently_being_removed;
 /** Needed by the post-create hook. */
 static char *path_to_last_complete_snapshot;
+static char *name_of_reference_snapshot;
 /** \sa \ref snap.h for details. */
 enum hook_status snapshot_creation_status;
 /** \sa \ref snap.h for details. */
@@ -313,6 +314,13 @@ static struct snapshot *find_orphaned_snapshot(struct snapshot_list *sl)
 	return NULL;
 }
 
+static int is_reference_snapshot(struct snapshot *s)
+{
+	if (!name_of_reference_snapshot)
+		return 0;
+	return strcmp(s->name, name_of_reference_snapshot)? 0 : 1;
+}
+
 /*
  * return: 0: no redundant snapshots, 1: rm process started, negative: error
  */
@@ -340,6 +348,8 @@ static struct snapshot *find_redundant_snapshot(struct snapshot_list *sl)
 			int64_t this_score;
 
 			if (snapshot_is_being_created(s))
+				continue;
+			if (is_reference_snapshot(s))
 				continue;
 			//DSS_DEBUG_LOG("checking %s\n", s->name);
 			if (s->interval > interval) {
@@ -380,6 +390,8 @@ static struct snapshot *find_outdated_snapshot(struct snapshot_list *sl)
 	FOR_EACH_SNAPSHOT(s, i, sl) {
 		if (snapshot_is_being_created(s))
 			continue;
+		if (is_reference_snapshot(s))
+			continue;
 		if (s->interval <= conf.num_intervals_arg)
 			continue;
 		return s;
@@ -389,14 +401,17 @@ static struct snapshot *find_outdated_snapshot(struct snapshot_list *sl)
 
 struct snapshot *find_oldest_removable_snapshot(struct snapshot_list *sl)
 {
-	struct snapshot *s = get_oldest_snapshot(sl);
-
-	if (!s) /* no snapshot found */
-		return NULL;
-	DSS_INFO_LOG("oldest snapshot: %s\n", s->name);
-	if (snapshot_is_being_created(s))
-		return NULL;
-	return s;
+	int i;
+	struct snapshot *s;
+	FOR_EACH_SNAPSHOT(s, i, sl) {
+		if (snapshot_is_being_created(s))
+			continue;
+		if (is_reference_snapshot(s))
+			continue;
+		DSS_INFO_LOG("oldest removable snapshot: %s\n", s->name);
+		return s;
+	}
+	return NULL;
 }
 
 static int rename_incomplete_snapshot(int64_t start)
@@ -454,7 +469,7 @@ static int try_to_free_disk_space(int low_disk_space)
 	victim = find_oldest_removable_snapshot(&sl);
 	if (victim)
 		goto remove;
-	DSS_CRIT_LOG("uhuhu: not enough disk space for a single snapshot\n");
+	DSS_CRIT_LOG("uhuhu: disk space low and nothing to remove\n");
 	ret = -ERRNO_TO_DSS_ERROR(ENOSPC);
 	goto out;
 remove:
@@ -696,6 +711,8 @@ static int handle_rsync_exit(int status)
 	if (ret < 0)
 		goto out;
 	snapshot_creation_status = HS_SUCCESS;
+	free(name_of_reference_snapshot);
+	name_of_reference_snapshot = NULL;
 out:
 	create_pid = 0;
 	create_process_stopped = 0;
@@ -918,12 +935,13 @@ static int use_rsync_locally(char *logname)
 
 static void create_rsync_argv(char ***argv, int64_t *num)
 {
-	char *logname, *newest;
+	char *logname;
 	int i = 0, j;
 	struct snapshot_list sl;
 
 	dss_get_snapshot_list(&sl);
-	newest = name_of_newest_complete_snapshot(&sl);
+	assert(!name_of_reference_snapshot);
+	name_of_reference_snapshot = name_of_newest_complete_snapshot(&sl);
 	free_snapshot_list(&sl);
 
 	*argv = dss_malloc((15 + conf.rsync_option_given) * sizeof(char *));
@@ -932,12 +950,12 @@ static void create_rsync_argv(char ***argv, int64_t *num)
 	(*argv)[i++] = dss_strdup("--delete");
 	for (j = 0; j < conf.rsync_option_given; j++)
 		(*argv)[i++] = dss_strdup(conf.rsync_option_arg[j]);
-	if (newest) {
-		DSS_INFO_LOG("using %s as reference snapshot\n", newest);
-		(*argv)[i++] = make_message("--link-dest=../%s", newest);
-		free(newest);
+	if (name_of_reference_snapshot) {
+		DSS_INFO_LOG("using %s as reference\n", name_of_reference_snapshot);
+		(*argv)[i++] = make_message("--link-dest=../%s",
+			name_of_reference_snapshot);
 	} else
-		DSS_INFO_LOG("no previous snapshot found\n");
+		DSS_INFO_LOG("no suitable reference snapshot found\n");
 	logname = dss_logname();
 	if (use_rsync_locally(logname))
 		(*argv)[i++] = dss_strdup(conf.source_dir_arg);

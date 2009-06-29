@@ -90,16 +90,6 @@ int complete_name(int64_t start, int64_t end, char **result);
 __malloc char *name_of_newest_complete_snapshot(struct snapshot_list *sl);
 
 /**
- * Get the oldest snapshot in a snapshot list.
- */
-_static_inline_ struct snapshot *get_oldest_snapshot(struct snapshot_list *sl)
-{
-	if (!sl->num_snapshots)
-		return NULL;
-	return sl->snapshots[0];
-}
-
-/**
  * Get the newest snapshot in a snapshot list.
  */
 _static_inline_ struct snapshot *get_newest_snapshot(struct snapshot_list *sl)
