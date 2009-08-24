@@ -433,14 +433,19 @@ static int rename_incomplete_snapshot(int64_t start)
 	return ret;
 }
 
-static int try_to_free_disk_space(int low_disk_space)
+static int try_to_free_disk_space(void)
 {
 	int ret;
 	struct snapshot_list sl;
 	struct snapshot *victim;
 	struct timeval now;
 	const char *why;
+	int low_disk_space;
 
+	ret = disk_space_low();
+	if (ret < 0)
+		return ret;
+	low_disk_space = ret;
 	gettimeofday(&now, NULL);
 	if (tv_diff(&next_removal_check, &now, NULL) > 0)
 		return 0;
@@ -1006,7 +1011,6 @@ static int select_loop(void)
 
 	for (;;) {
 		fd_set rfds;
-		int low_disk_space;
 		struct timeval *tvp;
 
 		if (remove_pid)
@@ -1041,11 +1045,7 @@ static int select_loop(void)
 				goto out;
 			continue;
 		}
-		ret = disk_space_low();
-		if (ret < 0)
-			goto out;
-		low_disk_space = ret;
-		ret = try_to_free_disk_space(low_disk_space);
+		ret = try_to_free_disk_space();
 		if (ret < 0)
 			goto out;
 		if (snapshot_removal_status != HS_READY) {
