@@ -449,8 +449,14 @@ static int try_to_free_disk_space(void)
 	gettimeofday(&now, NULL);
 	if (tv_diff(&next_removal_check, &now, NULL) > 0)
 		return 0;
-	if (!low_disk_space && conf.keep_redundant_given)
-		return 0;
+	if (!low_disk_space) {
+		if (conf.keep_redundant_given)
+			return 0;
+		if (snapshot_creation_status != HS_READY)
+			return 0;
+		if (next_snapshot_is_due())
+			return 0;
+	}
 	dss_get_snapshot_list(&sl);
 	ret = 0;
 	if (!low_disk_space && sl.num_snapshots <= 1)
