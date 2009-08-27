@@ -47,7 +47,7 @@ static int create_process_stopped;
 /** Process id of current pre-remove/rm/post-remove process. */
 static pid_t remove_pid;
 /** When the next snapshot is due. */
-static struct timeval next_snapshot_time;
+static int64_t next_snapshot_time;
 /** When to try to remove something. */
 static struct timeval next_removal_check;
 /** Creation time of the snapshot currently being created. */
@@ -153,17 +153,15 @@ static void dss_get_snapshot_list(struct snapshot_list *sl)
 
 static int next_snapshot_is_due(void)
 {
-	struct timeval now, unit_interval = {.tv_sec = 24 * 3600 * conf.unit_interval_arg},
-		tmp, diff;
-	int64_t x = 0;
+	int64_t x = 0, now = get_current_time(), unit_interval
+		= 24 * 3600 * conf.unit_interval_arg;
 	unsigned wanted = desired_number_of_snapshots(0, conf.num_intervals_arg),
 		num_complete_snapshots = 0;
 	int i, ret;
 	struct snapshot *s = NULL;
 	struct snapshot_list sl;
 
-	gettimeofday(&now, NULL);
-	if (tv_diff(&next_snapshot_time, &now, NULL) > 0)
+	if (next_snapshot_time > now)
 		return 0;
 	assert(snapshot_creation_status == HS_READY);
 	current_snapshot_creation_time = 0;
@@ -175,27 +173,20 @@ static int next_snapshot_is_due(void)
 		x += s->completion_time - s->creation_time;
 	}
 	assert(x >= 0);
-	if (num_complete_snapshots)
-		x /= num_complete_snapshots; /* avg time to create one snapshot */
-	x *= wanted; /* time to create all snapshots in interval 0 */
-	tmp.tv_sec = x;
-	tmp.tv_usec = 0;
-	ret = tv_diff(&unit_interval, &tmp, &diff); /* total sleep time per unit interval */
-	if (ret < 0 || !s) { /* unit_interval < tmp or no snapshot */
-		ret = 1;
-		goto out;
-	}
 
-	tv_divide(wanted, &diff, &tmp); /* sleep time between two snapshots */
-	diff.tv_sec = s->completion_time; /* completion time of the latest snapshot */
-	diff.tv_usec = 0;
-	tv_add(&diff, &tmp, &next_snapshot_time);
-	ret = (tv_diff(&now, &next_snapshot_time, &diff) < 0)? 0 : 1;
+	next_snapshot_time = now;
+	if (num_complete_snapshots == 0)
+		goto out;
+	x /= num_complete_snapshots; /* avg time to create one snapshot */
+	if (unit_interval < x * wanted) /* oops, no sleep at all */
+		goto out;
+	next_snapshot_time = s->completion_time + unit_interval / wanted - x;
 out:
 	free_snapshot_list(&sl);
+	ret = next_snapshot_time <= now;
 	if (ret == 0)
 		DSS_DEBUG_LOG("next snapshot due in %lu seconds\n",
-			tv2ms(&diff) / 1000);
+			next_snapshot_time - now);
 	else
 		DSS_DEBUG_LOG("next snapshot: now\n");
 	return ret;
@@ -707,8 +698,7 @@ static int handle_rsync_exit(int status)
 		DSS_WARNING_LOG("rsync process %d returned %d -- restarting\n",
 			(int)create_pid, es);
 		snapshot_creation_status = HS_NEEDS_RESTART;
-		gettimeofday(&next_snapshot_time, NULL);
-		next_snapshot_time.tv_sec += 60;
+		next_snapshot_time = get_current_time() + 60;
 		ret = 1;
 		goto out;
 	}
@@ -748,8 +738,7 @@ static int handle_pre_create_hook_exit(int status)
 			DSS_NOTICE_LOG("deferring snapshot creation...\n");
 			warn_count = 60; /* warn only once per hour */
 		}
-		gettimeofday(&next_snapshot_time, NULL);
-		next_snapshot_time.tv_sec += 60;
+		next_snapshot_time = get_current_time() + 60;
 		snapshot_creation_status = HS_READY;
 		ret = 0;
 		goto out;
