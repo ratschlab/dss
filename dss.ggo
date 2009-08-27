@@ -110,11 +110,17 @@ groupoption "prune" P
 "Remove redundant and outdated snapshots"
 group="command"
 details="
-	A snapshot is considered outdated if it belongs to an interval
-	greater than the maximum number of intervals. It is said to be
-	redundant if it belongs to an interval that already contains
-	more than the desired number of snapshots. This command gets
-	rid of such snapshots.
+	A snapshot is considered outdated if its interval number
+	is greater or equal than the specified number of unit
+	intervals. See the \"Intervals\" section below for the precise
+	definition of these terms.
+
+	A snapshot is said to be redundant if it belongs to an
+	interval that already contains more than the desired number
+	of snapshots.
+
+	The prune command gets rid of both outdated and redundant
+	snapshots.
 "
 
 groupoption "ls" L

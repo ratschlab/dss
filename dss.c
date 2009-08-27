@@ -385,14 +385,14 @@ static struct snapshot *find_outdated_snapshot(struct snapshot_list *sl)
 	int i;
 	struct snapshot *s;
 
-	DSS_DEBUG_LOG("looking for snapshots belonging to intervals greater than %d\n",
+	DSS_DEBUG_LOG("looking for snapshots belonging to intervals >= %d\n",
 		conf.num_intervals_arg);
 	FOR_EACH_SNAPSHOT(s, i, sl) {
 		if (snapshot_is_being_created(s))
 			continue;
 		if (is_reference_snapshot(s))
 			continue;
-		if (s->interval <= conf.num_intervals_arg)
+		if (s->interval < conf.num_intervals_arg)
 			continue;
 		return s;
 	}
