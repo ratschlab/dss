@@ -818,9 +818,13 @@ static int check_config(void)
 	return 1;
 }
 
+/*
+ * Returns < 0 on errors, 0 if no config file is given and > 0 if the config
+ * file was read successfully.
+ */
 static int parse_config_file(int override)
 {
-	int ret;
+	int ret, config_file_exists;
 	char *config_file;
 	struct stat statbuf;
 	char *old_logfile_arg = NULL;
@@ -839,13 +843,13 @@ static int parse_config_file(int override)
 		old_daemon_given = conf.daemon_given;
 	}
 
-	ret = stat(config_file, &statbuf);
-	if (ret && conf.config_file_given) {
+	config_file_exists = !stat(config_file, &statbuf);
+	if (!config_file_exists && conf.config_file_given) {
 		ret = -ERRNO_TO_DSS_ERROR(errno);
 		DSS_ERROR_LOG("failed to stat config file %s\n", config_file);
 		goto out;
 	}
-	if (!ret) {
+	if (config_file_exists) {
 		struct cmdline_parser_params params = {
 			.override = override,
 			.initialize = 0,
@@ -885,6 +889,7 @@ static int parse_config_file(int override)
 	}
 	DSS_DEBUG_LOG("loglevel: %d\n", conf.loglevel_arg);
 //	cmdline_parser_dump(logfile? logfile : stdout, &conf);
+	ret = config_file_exists;
 out:
 	free(config_file);
 	if (ret < 0)
@@ -1294,6 +1299,20 @@ int main(int argc, char **argv)
 	ret = parse_config_file(0);
 	if (ret < 0)
 		goto out;
+	if (ret == 0) { /* no config file given */
+		/*
+		 * Parse the command line options again, but this time check
+		 * that all required options are given.
+		 */
+		params = (struct cmdline_parser_params) {
+			.override = 1,
+			.initialize = 1,
+			.check_required = 1,
+			.check_ambiguity = 1,
+			.print_errors = 1
+		};
+		cmdline_parser_ext(argc, argv, &conf, &params); /* aborts on errors */
+	}
 	if (conf.daemon_given)
 		daemon_init();
 	ret = change_to_dest_dir();
