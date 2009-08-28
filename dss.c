@@ -734,7 +734,6 @@ static int handle_rsync_exit(int status)
 	free(name_of_reference_snapshot);
 	name_of_reference_snapshot = NULL;
 out:
-	create_pid = 0;
 	create_process_stopped = 0;
 	return ret;
 }
@@ -766,7 +765,6 @@ static int handle_pre_create_hook_exit(int status)
 	snapshot_creation_status = HS_PRE_SUCCESS;
 	ret = 1;
 out:
-	create_pid = 0;
 	return ret;
 }
 
@@ -792,6 +790,7 @@ static int handle_sigchld(void)
 				snapshot_creation_status);
 			return -E_BUG;
 		}
+		create_pid = 0;
 	}
 	if (pid == remove_pid) {
 		ret = handle_remove_exit(status);
