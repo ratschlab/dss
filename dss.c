@@ -151,19 +151,16 @@ static void dss_get_snapshot_list(struct snapshot_list *sl)
 	get_snapshot_list(sl, conf.unit_interval_arg, conf.num_intervals_arg);
 }
 
-static int next_snapshot_is_due(void)
+static int64_t compute_next_snapshot_time(void)
 {
 	int64_t x = 0, now = get_current_time(), unit_interval
-		= 24 * 3600 * conf.unit_interval_arg;
+		= 24 * 3600 * conf.unit_interval_arg, ret;
 	unsigned wanted = desired_number_of_snapshots(0, conf.num_intervals_arg),
 		num_complete_snapshots = 0;
-	int i, ret;
+	int i;
 	struct snapshot *s = NULL;
 	struct snapshot_list sl;
 
-	if (next_snapshot_time > now)
-		return 0;
-	assert(snapshot_creation_status == HS_READY);
 	current_snapshot_creation_time = 0;
 	dss_get_snapshot_list(&sl);
 	FOR_EACH_SNAPSHOT(s, i, &sl) {
@@ -174,22 +171,42 @@ static int next_snapshot_is_due(void)
 	}
 	assert(x >= 0);
 
-	next_snapshot_time = now;
+	ret = now;
 	if (num_complete_snapshots == 0)
 		goto out;
 	x /= num_complete_snapshots; /* avg time to create one snapshot */
 	if (unit_interval < x * wanted) /* oops, no sleep at all */
 		goto out;
-	next_snapshot_time = s->completion_time + unit_interval / wanted - x;
+	ret = s->completion_time + unit_interval / wanted - x;
 out:
 	free_snapshot_list(&sl);
-	ret = next_snapshot_time <= now;
-	if (ret == 0)
-		DSS_DEBUG_LOG("next snapshot due in %lu seconds\n",
-			next_snapshot_time - now);
-	else
-		DSS_DEBUG_LOG("next snapshot: now\n");
 	return ret;
+}
+
+static inline void invalidate_next_snapshot_time(void)
+{
+	next_snapshot_time = 0;
+}
+
+static inline int next_snapshot_time_is_valid(void)
+{
+	return next_snapshot_time != 0;
+}
+
+static int next_snapshot_is_due(void)
+{
+	int64_t now = get_current_time();
+
+	assert(snapshot_creation_status == HS_READY);
+	if (!next_snapshot_time_is_valid())
+		next_snapshot_time = compute_next_snapshot_time();
+	if (next_snapshot_time <= now) {
+		DSS_DEBUG_LOG("next snapshot: now\n");
+		return 1;
+	}
+	DSS_DEBUG_LOG("next snapshot due in %" PRId64 " seconds\n",
+		next_snapshot_time - now);
+	return 0;
 }
 
 static int pre_create_hook(void)
@@ -197,6 +214,8 @@ static int pre_create_hook(void)
 	int ret, fds[3] = {0, 0, 0};
 
 	assert(snapshot_creation_status == HS_READY);
+	/* make sure that the next snapshot time will be recomputed */
+	invalidate_next_snapshot_time();
 	if (!conf.pre_create_hook_given) {
 		snapshot_creation_status = HS_PRE_SUCCESS;
 		return 0;
@@ -887,6 +906,7 @@ static int handle_sighup(void)
 	ret = parse_config_file(1);
 	if (ret < 0)
 		return ret;
+	invalidate_next_snapshot_time();
 	return change_to_dest_dir();
 }
 
