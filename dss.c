@@ -888,7 +888,6 @@ static int parse_config_file(int override)
 		log_welcome(conf.loglevel_arg);
 	}
 	DSS_DEBUG_LOG("loglevel: %d\n", conf.loglevel_arg);
-//	cmdline_parser_dump(logfile? logfile : stdout, &conf);
 	ret = config_file_exists;
 out:
 	free(config_file);
@@ -903,14 +902,24 @@ static int change_to_dest_dir(void)
 	return dss_chdir(conf.dest_dir_arg);
 }
 
+static void dump_dss_config(const char *msg)
+{
+	if (conf.loglevel_arg > INFO)
+		return;
+	DSS_INFO_LOG("%s\n", msg);
+	cmdline_parser_dump(logfile? logfile : stderr, &conf);
+}
+
 static int handle_sighup(void)
 {
 	int ret;
 
-	DSS_NOTICE_LOG("SIGHUP\n");
+	DSS_NOTICE_LOG("SIGHUP, re-reading config\n");
+	dump_dss_config("current config");
 	ret = parse_config_file(1);
 	if (ret < 0)
 		return ret;
+	dump_dss_config("new config");
 	invalidate_next_snapshot_time();
 	return change_to_dest_dir();
 }
@@ -1315,6 +1324,7 @@ int main(int argc, char **argv)
 	}
 	if (conf.daemon_given)
 		daemon_init();
+	dump_dss_config("dss configuration");
 	ret = change_to_dest_dir();
 	if (ret < 0)
 		goto out;
