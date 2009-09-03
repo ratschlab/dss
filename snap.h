@@ -26,7 +26,7 @@ enum hook_status {
  * The status of a snapshot.
  *
  * The snapshot directories come in four different flavours, depending
- * on how the two staus flags are set. Examples:
+ * on how the two status flags are set. Examples:
  *
  * Complete, not being deleted: 1204565370-1204565371.Sun_Mar_02_2008_14_33-Sun_Mar_02_2008_14_43.
  * Complete, being deleted: 1204565370-1204565371.being_deleted.
@@ -48,7 +48,7 @@ struct snapshot {
 	int64_t creation_time;
 	/**
 	 * Seconds after the epoch when creation of this snapshot completed.
-	 * Only meaningful if the SS_COMPLTE bit is set.
+	 * Only meaningful if the SS_COMPLETE bit is set.
 	 */
 	int64_t completion_time;
 	/** See \ref snapshot_status_flags. */
