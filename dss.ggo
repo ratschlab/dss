@@ -194,6 +194,21 @@ details="
 	dss.
 "
 
+option "no-resume" -
+#~~~~~~~~~~~~~~~~~~~
+"Do not try to resume from previous runs"
+flag off
+details = "
+	Starting from version 0.1.4, dss tries to resume from a
+	previously cancelled dss instance by default. It does so by
+	looking at the status of the most recently created snapshot. If
+	this snapshot status is incomplete, its directory is reused
+	as the destination directory for a subsequent rsync run.
+
+	The --no-resume option deactivates this feature so that a new
+	directory is always used as the rsync destination directory.
+"
+
 option "rsync-option" O
 #~~~~~~~~~~~~~~~~~~~~~~
 "Further rsync options"

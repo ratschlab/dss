@@ -966,6 +966,32 @@ static int use_rsync_locally(char *logname)
 	return 1;
 }
 
+static int rename_resume_snap(int64_t creation_time)
+{
+	struct snapshot_list sl = {.num_snapshots = 0};
+	struct snapshot *s;
+	char *new_name = incomplete_name(creation_time);
+	int ret;
+
+	ret = 0;
+	if (conf.no_resume_given)
+		goto out;
+	dss_get_snapshot_list(&sl);
+	s = get_newest_snapshot(&sl);
+	if (!s)
+		goto out;
+	if ((s->flags & SS_COMPLETE) != 0) /* complete */
+		goto out;
+	DSS_INFO_LOG("resuming: reusing %s as destination dir\n", s->name);
+	ret = dss_rename(s->name, new_name);
+out:
+	if (ret >= 0)
+		DSS_NOTICE_LOG("creating new snapshot %s\n", new_name);
+	free(new_name);
+	free_snapshot_list(&sl);
+	return ret;
+}
+
 static void create_rsync_argv(char ***argv, int64_t *num)
 {
 	char *logname;
@@ -1018,11 +1044,10 @@ static void free_rsync_argv(char **argv)
 static int create_snapshot(char **argv)
 {
 	int ret, fds[3] = {0, 0, 0};
-	char *name;
 
-	name = incomplete_name(current_snapshot_creation_time);
-	DSS_NOTICE_LOG("creating new snapshot %s\n", name);
-	free(name);
+	ret = rename_resume_snap(current_snapshot_creation_time);
+	if (ret < 0)
+		return ret;
 	ret = dss_exec(&create_pid, argv[0], argv, fds);
 	if (ret < 0)
 		return ret;
