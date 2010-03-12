@@ -197,7 +197,6 @@ static int next_snapshot_is_due(void)
 {
 	int64_t now = get_current_time();
 
-	assert(snapshot_creation_status == HS_READY);
 	if (!next_snapshot_time_is_valid())
 		next_snapshot_time = compute_next_snapshot_time();
 	if (next_snapshot_time <= now) {
@@ -1124,6 +1123,8 @@ static int select_loop(void)
 			create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
 			/* fall through */
 		case HS_NEEDS_RESTART:
+			if (!next_snapshot_is_due())
+				continue;
 			ret = create_snapshot(rsync_argv);
 			if (ret < 0)
 				goto out;
