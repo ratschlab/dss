@@ -506,6 +506,7 @@ static int post_create_hook(void)
 	char *cmd;
 
 	if (!conf.post_create_hook_given) {
+		create_pid = 0;
 		snapshot_creation_status = HS_READY;
 		return 0;
 	}
