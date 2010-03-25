@@ -1118,8 +1118,10 @@ static int select_loop(void)
 		case HS_POST_RUNNING:
 			continue;
 		case HS_PRE_SUCCESS:
-			free_rsync_argv(rsync_argv);
-			create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
+			if (!name_of_reference_snapshot) {
+				free_rsync_argv(rsync_argv);
+				create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
+			}
 			/* fall through */
 		case HS_NEEDS_RESTART:
 			if (!next_snapshot_is_due())
