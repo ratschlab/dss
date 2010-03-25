@@ -161,7 +161,6 @@ static int64_t compute_next_snapshot_time(void)
 	struct snapshot *s = NULL;
 	struct snapshot_list sl;
 
-	current_snapshot_creation_time = 0;
 	dss_get_snapshot_list(&sl);
 	FOR_EACH_SNAPSHOT(s, i, &sl) {
 		if (!(s->flags & SS_COMPLETE))
