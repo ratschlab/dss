@@ -250,8 +250,7 @@ static int pre_remove_hook(struct snapshot *s, const char *why)
 	cmd = make_message("%s %s/%s", conf.pre_remove_hook_arg,
 		conf.dest_dir_arg, s->name);
 	DSS_DEBUG_LOG("executing %s\n", cmd);
-	ret = dss_exec_cmdline_pid(&remove_pid,
-		conf.pre_remove_hook_arg, fds);
+	ret = dss_exec_cmdline_pid(&remove_pid, cmd, fds);
 	free(cmd);
 	if (ret < 0)
 		return ret;
