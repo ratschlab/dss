@@ -553,6 +553,7 @@ static void stop_create_process(void)
 {
 	if (!create_pid || create_process_stopped)
 		return;
+	DSS_INFO_LOG("suspending create process %d\n", (int)create_pid);
 	kill(SIGSTOP, create_pid);
 	create_process_stopped = 1;
 }
@@ -561,6 +562,7 @@ static void restart_create_process(void)
 {
 	if (!create_pid || !create_process_stopped)
 		return;
+	DSS_INFO_LOG("resuming create process %d\n", (int)create_pid);
 	kill (SIGCONT, create_pid);
 	create_process_stopped = 0;
 }
