@@ -4,23 +4,23 @@
  * Licensed under the GPL v2. For licencing details see COPYING.
  */
 
+
 /** The possible states for snapshot creation/removal. */
-enum hook_status {
-	/** We are ready to take the next snapshot. */
-	HS_READY,
-	/** The pre-create/pre-remove hook has been started. */
-	HS_PRE_RUNNING,
-	/** The pre-create/pre-remove hook exited successfully. */
-	HS_PRE_SUCCESS,
-	/** The rsync/rm process is running. */
-	HS_RUNNING,
-	/** The rsync/rm process exited successfully. */
-	HS_SUCCESS,
-	/** The rsync/rm process needs to be restarted. */
-	HS_NEEDS_RESTART,
-	/** The post-create/post-remove hook has been started. */
-	HS_POST_RUNNING,
-};
+#define HOOK_STATUS_ARRAY \
+	HSA_ITEM(HS_READY, "ready for action"), \
+	HSA_ITEM(HS_PRE_RUNNING, "pre-hook running"), \
+	HSA_ITEM(HS_PRE_SUCCESS, "pre-hook completed successfully"), \
+	HSA_ITEM(HS_RUNNING, "in progress"), \
+	HSA_ITEM(HS_SUCCESS, "process terminated successfully"), \
+	HSA_ITEM(HS_NEEDS_RESTART, "restart needed"), \
+	HSA_ITEM(HS_POST_RUNNING, "post-hook running"), \
+
+
+#define HSA_ITEM(x, y) x
+enum hook_status {HOOK_STATUS_ARRAY};
+#undef HSA_ITEM
+#define HSA_ITEM(x, y) [x] = y
+
 
 /**
  * The status of a snapshot.

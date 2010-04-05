@@ -64,7 +64,106 @@ enum hook_status snapshot_removal_status;
 
 
 DEFINE_DSS_ERRLIST;
+static const char const *hook_status_description[] = {HOOK_STATUS_ARRAY};
 
+/* may be called with ds == NULL. */
+static int disk_space_low(struct disk_space *ds)
+{
+	struct disk_space ds_struct;
+
+	if (!ds) {
+		int ret = get_disk_space(".", &ds_struct);
+		if (ret < 0)
+			return ret;
+		ds = &ds_struct;
+	}
+	if (conf.min_free_mb_arg)
+		if (ds->free_mb < conf.min_free_mb_arg)
+			return 1;
+	if (conf.min_free_percent_arg)
+		if (ds->percent_free < conf.min_free_percent_arg)
+			return 1;
+	if (conf.min_free_percent_inodes_arg)
+		if (ds->percent_free_inodes < conf.min_free_percent_inodes_arg)
+			return 1;
+	return 0;
+}
+
+static void dump_dss_config(const char *msg)
+{
+	const char dash[] = "-----------------------------";
+	int ret;
+	FILE *log = logfile? logfile : stderr;
+	struct disk_space ds;
+	int64_t now = get_current_time();
+
+	if (conf.loglevel_arg > INFO)
+		return;
+
+	fprintf(log, "%s <%s config> %s\n", dash, msg, dash);
+	fprintf(log, "\n*** disk space ***\n\n");
+	ret = get_disk_space(".", &ds);
+	if (ret >= 0) {
+		DSS_INFO_LOG("disk space low: %s\n", disk_space_low(&ds)?
+			"yes" : "no");
+		log_disk_space(&ds);
+	} else
+		DSS_ERROR_LOG("can not get free disk space: %s\n",
+			dss_strerror(-ret));
+
+	/* we continue on errors from get_disk_space */
+
+	fprintf(log, "\n*** command line and config file options ***\n\n");
+	cmdline_parser_dump(log, &conf);
+	fprintf(log, "\n*** internal state ***\n\n");
+	fprintf(log,
+		"pid: %d\n"
+		"logile: %s\n"
+		"snapshot_currently_being_removed: %s\n"
+		"path_to_last_complete_snapshot: %s\n"
+		"reference_snapshot: %s\n"
+		"snapshot_creation_status: %s\n"
+		"snapshot_removal_status: %s\n"
+		,
+		(int) getpid(),
+		logfile? conf.logfile_arg : "stderr",
+		snapshot_currently_being_removed?
+			snapshot_currently_being_removed->name : "(none)",
+		path_to_last_complete_snapshot?
+			path_to_last_complete_snapshot : "(none)",
+		name_of_reference_snapshot?
+			name_of_reference_snapshot : "(none)",
+		hook_status_description[snapshot_creation_status],
+		hook_status_description[snapshot_removal_status]
+	);
+	if (create_pid != 0)
+		fprintf(log,
+			"create_pid: %" PRId32 "\n"
+			"create process is %sstopped\n"
+			,
+			create_pid,
+			create_process_stopped? "" : "not "
+		);
+	if (remove_pid != 0)
+		fprintf(log, "remove_pid: %" PRId32 "\n", remove_pid);
+	if (next_snapshot_time != 0)
+		fprintf(log, "next snapshot due in %" PRId64 " seconds\n",
+			next_snapshot_time - now);
+	if (current_snapshot_creation_time != 0)
+		fprintf(log, "current_snapshot_creation_time: %"
+			PRId64 " (%" PRId64 " seconds ago)\n",
+			current_snapshot_creation_time,
+			now - current_snapshot_creation_time
+		);
+	if (next_removal_check.tv_sec != 0) {
+		fprintf(log, "next removal check: %llu (%llu seconds ago)\n",
+			(long long unsigned)next_removal_check.tv_sec,
+			now - (long long unsigned)next_removal_check.tv_sec
+		);
+
+	}
+	fprintf(log, "%s </%s config> %s\n", dash, msg, dash);
+}
 
 /* a litte cpp magic helps to DRY */
 #define COMMANDS \
@@ -125,25 +224,6 @@ static __printf_1_2 void dss_msg(const char* fmt,...)
 	va_start(argp, fmt);
 	vfprintf(outfd, fmt, argp);
 	va_end(argp);
-}
-
-static int disk_space_low(void)
-{
-	struct disk_space ds;
-	int ret = get_disk_space(".", &ds);
-
-	if (ret < 0)
-		return ret;
-	if (conf.min_free_mb_arg)
-		if (ds.free_mb < conf.min_free_mb_arg)
-			return 1;
-	if (conf.min_free_percent_arg)
-		if (ds.percent_free < conf.min_free_percent_arg)
-			return 1;
-	if (conf.min_free_percent_inodes_arg)
-		if (ds.percent_free_inodes < conf.min_free_percent_inodes_arg)
-			return 1;
-	return 0;
 }
 
 static void dss_get_snapshot_list(struct snapshot_list *sl)
@@ -441,7 +521,7 @@ static int try_to_free_disk_space(void)
 	const char *why;
 	int low_disk_space;
 
-	ret = disk_space_low();
+	ret = disk_space_low(NULL);
 	if (ret < 0)
 		return ret;
 	low_disk_space = ret;
@@ -903,24 +983,16 @@ static int change_to_dest_dir(void)
 	return dss_chdir(conf.dest_dir_arg);
 }
 
-static void dump_dss_config(const char *msg)
-{
-	if (conf.loglevel_arg > INFO)
-		return;
-	DSS_INFO_LOG("%s\n", msg);
-	cmdline_parser_dump(logfile? logfile : stderr, &conf);
-}
-
 static int handle_sighup(void)
 {
 	int ret;
 
 	DSS_NOTICE_LOG("SIGHUP, re-reading config\n");
-	dump_dss_config("current config");
+	dump_dss_config("old");
 	ret = parse_config_file(1);
 	if (ret < 0)
 		return ret;
-	dump_dss_config("new config");
+	dump_dss_config("reloaded");
 	invalidate_next_snapshot_time();
 	return change_to_dest_dir();
 }
@@ -1354,10 +1426,10 @@ int main(int argc, char **argv)
 	}
 	if (conf.daemon_given)
 		daemon_init();
-	dump_dss_config("dss configuration");
 	ret = change_to_dest_dir();
 	if (ret < 0)
 		goto out;
+	dump_dss_config("startup");
 	ret = setup_signal_handling();
 	if (ret < 0)
 		goto out;
