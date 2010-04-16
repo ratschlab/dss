@@ -1079,7 +1079,6 @@ static int select_loop(void)
 		}
 		FD_ZERO(&rfds);
 		FD_SET(signal_pipe, &rfds);
-		DSS_DEBUG_LOG("tvp: %p, tv_sec : %lu\n", tvp, (long unsigned) tv.tv_sec);
 		ret = dss_select(signal_pipe + 1, &rfds, NULL, tvp);
 		if (ret < 0)
 			goto out;
