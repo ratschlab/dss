@@ -779,18 +779,22 @@ static int handle_sigchld(void)
 	if (pid == create_pid) {
 		switch (snapshot_creation_status) {
 		case HS_PRE_RUNNING:
-			return handle_pre_create_hook_exit(status);
+			ret = handle_pre_create_hook_exit(status);
+			break;
 		case HS_RUNNING:
-			return handle_rsync_exit(status);
+			ret = handle_rsync_exit(status);
+			break;
 		case HS_POST_RUNNING:
 			snapshot_creation_status = HS_READY;
-			return 1;
+			ret = 1;
+			break;
 		default:
 			DSS_EMERG_LOG("BUG: create can't die in status %d\n",
 				snapshot_creation_status);
 			return -E_BUG;
 		}
 		create_pid = 0;
+		return ret;
 	}
 	if (pid == remove_pid) {
 		ret = handle_remove_exit(status);
