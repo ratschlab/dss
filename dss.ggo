@@ -77,9 +77,10 @@ option "logfile" -
 "Logfile for the dss daemon process"
 string typestr="filename"
 optional
-details="
-	This option is mostly useful for the run command if --daemon
-	is also given.
+details = "
+	This option is only honored if both --run and --daemon are
+	given. Otherwise it is silently ignored and log output is
+	written to stderr.
 "
 
 ##################

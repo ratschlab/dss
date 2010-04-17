@@ -884,7 +884,7 @@ static int parse_config_file(int override)
 			conf.logfile_given = 1;
 		}
 	}
-	if (conf.logfile_given) {
+	if (conf.logfile_given && conf.run_given && conf.daemon_given) {
 		logfile = open_log(conf.logfile_arg);
 		log_welcome(conf.loglevel_arg);
 	}
