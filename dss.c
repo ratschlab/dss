@@ -541,29 +541,48 @@ static int post_remove_hook(void)
 	return ret;
 }
 
-static void kill_process(pid_t pid)
+static void dss_kill(pid_t pid, int sig, const char *msg)
 {
-	if (!pid)
+	const char *signame, *process_name;
+
+	if (pid == 0)
 		return;
-	DSS_WARNING_LOG("sending SIGTERM to pid %d\n", (int)pid);
-	kill(pid, SIGTERM);
+	switch (sig) {
+	case SIGTERM: signame = "TERM"; break;
+	case SIGSTOP: signame = "STOP"; break;
+	case SIGCONT: signame = "CONT"; break;
+	default: signame = "????";
+	}
+
+	if (pid == create_pid)
+		process_name = "create";
+	else if (pid == remove_pid)
+		process_name = "remove";
+	else process_name = "??????";
+
+	if (msg)
+		DSS_INFO_LOG("%s\n", msg);
+	DSS_DEBUG_LOG("sending signal %d (%s) to pid %d (%s process)\n",
+		sig, signame, (int)pid, process_name);
+	if (kill(pid, sig) >= 0)
+		return;
+	DSS_INFO_LOG("failed to send signal %d (%s) to pid %d (%s process)\n",
+		sig, signame, (int)pid, process_name);
 }
 
 static void stop_create_process(void)
 {
-	if (!create_pid || create_process_stopped)
+	if (create_process_stopped)
 		return;
-	DSS_INFO_LOG("suspending create process %d\n", (int)create_pid);
-	kill(SIGSTOP, create_pid);
+	dss_kill(create_pid, SIGSTOP, "suspending create process");
 	create_process_stopped = 1;
 }
 
 static void restart_create_process(void)
 {
-	if (!create_pid || !create_process_stopped)
+	if (!create_process_stopped)
 		return;
-	DSS_INFO_LOG("resuming create process %d\n", (int)create_pid);
-	kill (SIGCONT, create_pid);
+	dss_kill(create_pid, SIGCONT, "resuming create process");
 	create_process_stopped = 0;
 }
 
@@ -608,8 +627,7 @@ static int wait_for_process(pid_t pid, int *status)
 			}
 		}
 		/* SIGINT or SIGTERM */
-		DSS_WARNING_LOG("sending SIGTERM to pid %d\n", (int)pid);
-		kill(pid, SIGTERM);
+		dss_kill(pid, SIGTERM, "killing child process");
 	}
 	if (ret < 0)
 		DSS_ERROR_LOG("failed to wait for process %d\n", (int)pid);
@@ -938,8 +956,8 @@ static int handle_signal(void)
 	case SIGINT:
 	case SIGTERM:
 		restart_create_process();
-		kill_process(create_pid);
-		kill_process(remove_pid);
+		dss_kill(create_pid, SIGTERM, NULL);
+		dss_kill(remove_pid, SIGTERM, NULL);
 		ret = -E_SIGNAL;
 		break;
 	case SIGHUP:
