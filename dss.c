@@ -214,10 +214,6 @@ static int pre_create_hook(void)
 	assert(snapshot_creation_status == HS_READY);
 	/* make sure that the next snapshot time will be recomputed */
 	invalidate_next_snapshot_time();
-	if (!conf.pre_create_hook_given) {
-		snapshot_creation_status = HS_PRE_SUCCESS;
-		return 0;
-	}
 	DSS_DEBUG_LOG("executing %s\n", conf.pre_create_hook_arg);
 	ret = dss_exec_cmdline_pid(&create_pid,
 		conf.pre_create_hook_arg, fds);
@@ -243,10 +239,6 @@ static int pre_remove_hook(struct snapshot *s, const char *why)
 	*snapshot_currently_being_removed = *s;
 	snapshot_currently_being_removed->name = dss_strdup(s->name);
 
-	if (!conf.pre_remove_hook_given) {
-		snapshot_removal_status = HS_PRE_SUCCESS;
-		return 0;
-	}
 	cmd = make_message("%s %s/%s", conf.pre_remove_hook_arg,
 		conf.dest_dir_arg, s->name);
 	DSS_DEBUG_LOG("executing %s\n", cmd);
@@ -502,11 +494,6 @@ static int post_create_hook(void)
 	int ret, fds[3] = {0, 0, 0};
 	char *cmd;
 
-	if (!conf.post_create_hook_given) {
-		create_pid = 0;
-		snapshot_creation_status = HS_READY;
-		return 0;
-	}
 	cmd = make_message("%s %s/%s", conf.post_create_hook_arg,
 		conf.dest_dir_arg, path_to_last_complete_snapshot);
 	DSS_NOTICE_LOG("executing %s\n", cmd);
@@ -526,10 +513,6 @@ static int post_remove_hook(void)
 
 	assert(s);
 
-	if (!conf.post_remove_hook_given) {
-		snapshot_removal_status = HS_READY;
-		return 0;
-	}
 	cmd = make_message("%s %s/%s", conf.post_remove_hook_arg,
 		conf.dest_dir_arg, s->name);
 	DSS_NOTICE_LOG("executing %s\n", cmd);
@@ -657,10 +640,7 @@ static int handle_rm_exit(int status)
 		snapshot_removal_status = HS_READY;
 		return -E_BAD_EXIT_CODE;
 	}
-	if (conf.post_remove_hook_given)
-		snapshot_removal_status = HS_SUCCESS;
-	else
-		snapshot_removal_status = HS_READY;
+	snapshot_removal_status = HS_SUCCESS;
 	return 1;
 }
 
@@ -1172,8 +1152,6 @@ static void exit_hook(int exit_code)
 	char *argv[] = {conf.exit_hook_arg, dss_strerror(-exit_code), NULL};
 	pid_t pid;
 
-	if (!conf.exit_hook_given)
-		return;
 	DSS_NOTICE_LOG("executing %s %s\n", argv[0], argv[1]);
 	dss_exec(&pid, conf.exit_hook_arg, argv, fds);
 }
