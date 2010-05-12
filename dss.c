@@ -1126,7 +1126,10 @@ static int select_loop(void)
 				free_rsync_argv(rsync_argv);
 				create_rsync_argv(&rsync_argv, &current_snapshot_creation_time);
 			}
-			/* fall through */
+			ret = create_snapshot(rsync_argv);
+			if (ret < 0)
+				goto out;
+			continue;
 		case HS_NEEDS_RESTART:
 			if (!next_snapshot_is_due())
 				continue;
