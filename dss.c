@@ -1043,22 +1043,48 @@ static int use_rsync_locally(char *logname)
 static int rename_resume_snap(int64_t creation_time)
 {
 	struct snapshot_list sl = {.num_snapshots = 0};
-	struct snapshot *s;
+	struct snapshot *s = NULL;
 	char *new_name = incomplete_name(creation_time);
 	int ret;
+	const char *why;
 
 	ret = 0;
 	if (conf.no_resume_given)
 		goto out;
 	dss_get_snapshot_list(&sl);
+	/*
+	 * Snapshot recycling: We first look at the newest snapshot. If this
+	 * snapshot happens to be incomplete, the last rsync process was
+	 * aborted and we reuse this one. Otherwise we look at snapshots which
+	 * could be removed (outdated and redundant snapshots) as candidates
+	 * for recycling. If no outdated/redundant snapshot exists, we check if
+	 * there is an orphaned snapshot, which likely is useless anyway.
+	 *
+	 * Only if no existing snapshot is suitable for recycling, we bite the
+	 * bullet and create a new one.
+	 */
 	s = get_newest_snapshot(&sl);
-	if (!s)
+	if (!s) /* no snapshots at all */
 		goto out;
-	if ((s->flags & SS_COMPLETE) != 0) /* complete */
+	/* re-use last snapshot if it is incomplete */
+	why = "aborted";
+	if ((s->flags & SS_COMPLETE) == 0)
 		goto out;
-	DSS_INFO_LOG("resuming: reusing %s as destination dir\n", s->name);
-	ret = dss_rename(s->name, new_name);
+	why = "outdated";
+	s = find_outdated_snapshot(&sl);
+	if (s)
+		goto out;
+	why = "redundant";
+	s = find_redundant_snapshot(&sl);
+	if (s)
+		goto out;
+	why = "orphaned";
+	s = find_orphaned_snapshot(&sl);
 out:
+	if (s) {
+		DSS_INFO_LOG("reusing %s snapshot %s\n", why, s->name);
+		ret = dss_rename(s->name, new_name);
+	}
 	if (ret >= 0)
 		DSS_NOTICE_LOG("creating new snapshot %s\n", new_name);
 	free(new_name);
