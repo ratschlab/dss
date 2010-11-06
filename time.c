@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2009 Andre Noll <maan@systemlinux.org>
+ * Copyright (C) 2005-2010 Andre Noll <maan@systemlinux.org>
  *
  * Licensed under the GPL v2. For licencing details see COPYING.
  */
