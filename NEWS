@@ -1,4 +1,17 @@
 ------------------
+0.1.4 (2010-11-08)
+------------------
+
+This version of dss contains some new features, many improvements of
+existing features and several bug fixes.
+
+Support for resuming snapshot creation after restart has been added
+and snapshot removal is deferred until at least one current snapshot
+exists. The internal handling of the various hooks has been simplified
+and many error messages have been clarified. On SIGHUP, dss now writes
+its configuration and internal state to the log file.
+
+------------------
 0.1.3 (2009-06-06)
 ------------------
 

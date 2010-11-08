@@ -3,7 +3,7 @@
 # Licensed under the GPL v2. For licencing details see COPYING.
 
 package "dss"
-version "0.1.3"
+version "0.1.4"
 purpose "the dyadic snapshot scheduler
 
 dss creates hardlink-based snapshots of a given directory on a remote
