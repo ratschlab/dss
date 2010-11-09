@@ -400,7 +400,8 @@ details="
 	Note that not every file system supports the concept of inodes.
 	Moreover it is not possible to reliably detect whether this is
 	the case. Therefore this feature is disabled by default. It's
-	safe to enable it for ext3 file systems on linux though.
+	safe to enable it for ext2/ext3/ext4 file systems on linux
+	though.
 
 	A value of zero (the default) deactivates this check.
 "
