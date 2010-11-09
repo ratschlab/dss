@@ -268,7 +268,7 @@ option "pre-create-hook" r
 #~~~~~~~~~~~~~~~~~~~~~~~~~~
 "Executed before snapshot creation"
 string typestr="command"
-default = "/bin/true"
+default = "true"
 optional
 details="
 	Execute this command before trying to create a new snapshot.
@@ -287,7 +287,7 @@ option "post-create-hook" o
 #~~~~~~~~~~~~~~~~~~~~~~~~~~
 "Executed after snapshot creation"
 string typestr="command"
-default = "/bin/true"
+default = "true"
 optional
 details="
 	Execute this after a snapshot has successfully been
@@ -304,7 +304,7 @@ option "pre-remove-hook" -
 #~~~~~~~~~~~~~~~~~~~~~~~~~~
 "Executed before snapshot removal"
 string typestr="command"
-default = "/bin/true"
+default = "true"
 optional
 details="
 	Execute this command before removing a snapshot. The full
@@ -326,7 +326,7 @@ option "post-remove-hook" -
 #~~~~~~~~~~~~~~~~~~~~~~~~~~
 "Executed after snapshot removal"
 string typestr="command"
-default = "/bin/true"
+default = "true"
 optional
 details="
 	Execute this after a snapshot has successfully been removed. As
@@ -339,7 +339,7 @@ option "exit-hook" e
 #~~~~~~~~~~~~~~~~~~~
 "Executed if run command exits"
 string typestr="command"
-default = "/bin/true"
+default = "true"
 optional
 details="
 	This hook is only used if the --run command was given which
