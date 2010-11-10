@@ -51,7 +51,7 @@ Then execute the commands
 
 In order to print the list of all snapshots created so far, use
 
-	dss --list
+	dss --ls
 
 Yes, it's really that easy. Of course, dss supports many more
 features and config options such as taking snapshots from remote
