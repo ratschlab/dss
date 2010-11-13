@@ -226,6 +226,18 @@ static __printf_1_2 void dss_msg(const char* fmt,...)
 	va_end(argp);
 }
 
+static char *get_config_file_name(void)
+{
+	char *home, *config_file;
+
+	if (conf.config_file_given)
+		return dss_strdup(conf.config_file_arg);
+	home = get_homedir();
+	config_file = make_message("%s/.dssrc", home);
+	free(home);
+	return config_file;
+}
+
 static void dss_get_snapshot_list(struct snapshot_list *sl)
 {
 	get_snapshot_list(sl, conf.unit_interval_arg, conf.num_intervals_arg);
@@ -906,18 +918,11 @@ static int check_config(void)
 static int parse_config_file(int override)
 {
 	int ret, config_file_exists;
-	char *config_file;
+	char *config_file = get_config_file_name();
 	struct stat statbuf;
 	char *old_logfile_arg = NULL;
 	int old_daemon_given = 0;
 
-	if (conf.config_file_given)
-		config_file = dss_strdup(conf.config_file_arg);
-	else {
-		char *home = get_homedir();
-		config_file = make_message("%s/.dssrc", home);
-		free(home);
-	}
 	if (override) { /* SIGHUP */
 		if (conf.logfile_given)
 			old_logfile_arg = dss_strdup(conf.logfile_arg);
