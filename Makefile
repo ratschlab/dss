@@ -45,10 +45,12 @@ dss.1: dss dss.1.inc
 clean:
 	rm -f *.o dss dss.1 dss.1.html Makefile.deps *.ppm *.png *~ cmdline.c cmdline.h index.html
 
-index.html: dss.1.html index.html.in INSTALL README
+index.html: dss.1.html index.html.in INSTALL README NEWS
 	sed -e '/@README@/,$$d' index.html.in > $@
 	grutatxt -nb < README >> $@
-	sed -e '1,/@README@/d' -e '/@INSTALL@/,$$d' index.html.in >> $@
+	sed -e '1,/@README@/d' -e '/@NEWS@/,$$d' index.html.in >> $@
+	grutatxt -nb < NEWS >> $@
+	sed -e '1,/@NEWS@/d' -e '/@INSTALL@/,$$d' index.html.in >> $@
 	grutatxt -nb < INSTALL >> $@
 	sed -e '1,/@INSTALL@/d' -e '/@MAN_PAGE@/,$$d' index.html.in >> $@
 	sed -e '1,/Return to Main Contents/d' -e '/Index/,$$d' dss.1.html >> $@

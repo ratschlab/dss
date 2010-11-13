@@ -1,7 +1,5 @@
-------------------
 0.1.4 (2010-11-08)
-------------------
-
+~~~~~~~~~~~~~~~~~~
 This version of dss contains some new features, many improvements of
 existing features and several bug fixes.
 
@@ -11,36 +9,28 @@ exists. The internal handling of the various hooks has been simplified
 and many error messages have been clarified. On SIGHUP, dss now writes
 its configuration and internal state to the log file.
 
-------------------
 0.1.3 (2009-06-06)
-------------------
-
+~~~~~~~~~~~~~~~~~~
 You can now specify pre-rm/post-rm-hooks that are executed whenever
 a snapshot is deleted. This release adds better compatibility with
 rsync 3.0, and avoids busy loops when automatically restarting the
 rsync process.
 
-------------------
 0.1.2 (2009-03-05)
-------------------
-
+~~~~~~~~~~~~~~~~~~
 This release includes the reason why a snapshot gets removed in the
 log message. It will never remove the snapshot that is currently
 being created. It will really pass the full path to the last complete
 snapshot in the post_create_hook.
 
-------------------
 0.1.1 (2008-11-13)
-------------------
-
+~~~~~~~~~~~~~~~~~~
 This release prevents busy loops on rsync exit code 13. It ignores
 any snapshot directory with creation time &gt; completion time. It
 opens /dev/null for reading and writing when executing rsync. It shows
 human readable snapshot creation duration when listing snapshots. It
 restarts the rsync process if it returned with exit code 13.
 
-------------------
 0.1.0 (2008-10-10)
-------------------
-
+~~~~~~~~~~~~~~~~~~
 Initial public release.
