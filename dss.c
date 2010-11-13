@@ -33,6 +33,7 @@
 #include "df.h"
 #include "time.h"
 #include "snap.h"
+#include "ipc.h"
 
 /** Command line and config file options. */
 static struct gengetopt_args_info conf;
@@ -1259,10 +1260,23 @@ static void exit_hook(int exit_code)
 	dss_exec(&pid, conf.exit_hook_arg, argv, fds);
 }
 
+static void lock_dss_or_die(void)
+{
+	char *config_file = get_config_file_name();
+	int ret = lock_dss(config_file);
+
+	free(config_file);
+	if (ret < 0) {
+		DSS_EMERG_LOG("failed to lock: %s\n", dss_strerror(-ret));
+		exit(EXIT_FAILURE);
+	}
+}
+
 static int com_run(void)
 {
 	int ret;
 
+	lock_dss_or_die();
 	if (conf.dry_run_given) {
 		DSS_ERROR_LOG("dry_run not supported by this command\n");
 		return -E_SYNTAX;
@@ -1285,6 +1299,7 @@ static int com_prune(void)
 	struct disk_space ds;
 	const char *why;
 
+	lock_dss_or_die();
 	ret = get_disk_space(".", &ds);
 	if (ret < 0)
 		return ret;
@@ -1344,6 +1359,7 @@ static int com_create(void)
 	int ret, status;
 	char **rsync_argv;
 
+	lock_dss_or_die();
 	if (conf.dry_run_given) {
 		int i;
 		char *msg = NULL;
