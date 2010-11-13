@@ -313,6 +313,29 @@ static int mutex_lock(int id)
 	return 1;
 }
 
+static int mutex_try_lock(int id)
+{
+	int ret;
+
+	DSS_DEBUG_LOG("trying to lock\n");
+	struct sembuf sops[2] = {
+		{
+			.sem_num = 0,
+			.sem_op = 0,
+			.sem_flg = SEM_UNDO | IPC_NOWAIT
+		},
+		{
+			.sem_num = 0,
+			.sem_op = 1,
+			.sem_flg = SEM_UNDO | IPC_NOWAIT
+		}
+	};
+	ret = do_semop(id, sops, 2);
+	if (ret < 0)
+		return -ERRNO_TO_DSS_ERROR(errno);
+	return 1;
+}
+
 int lock_dss(char *config_file)
 {
 	int ret, key = get_key_or_die(config_file);
@@ -321,4 +344,22 @@ int lock_dss(char *config_file)
 	if (ret < 0)
 		return ret;
 	return mutex_lock(ret);
+}
+
+int get_dss_pid(char *config_file, pid_t *pid)
+{
+	int ret, semid, key = get_key_or_die(config_file);
+
+	ret = mutex_get(key, 0);
+	if (ret < 0)
+		return ret;
+	semid = ret;
+	ret = semctl(semid, 1, GETPID);
+	if (ret < 0)
+		return -E_NOT_RUNNING;
+	*pid = ret;
+	ret = mutex_try_lock(semid);
+	if (ret >= 0)
+		return -E_NOT_RUNNING;
+	return 1;
 }

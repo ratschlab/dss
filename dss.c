@@ -171,7 +171,8 @@ static void dump_dss_config(const char *msg)
 	COMMAND(ls) \
 	COMMAND(create) \
 	COMMAND(prune) \
-	COMMAND(run)
+	COMMAND(run) \
+	COMMAND(kill)
 #define COMMAND(x) static int com_ ##x(void);
 COMMANDS
 #undef COMMAND
@@ -237,6 +238,25 @@ static char *get_config_file_name(void)
 	config_file = make_message("%s/.dssrc", home);
 	free(home);
 	return config_file;
+}
+
+static int com_kill(void)
+{
+	pid_t pid;
+	char *config_file = get_config_file_name();
+	int ret = get_dss_pid(config_file, &pid);
+
+	free(config_file);
+	if (ret < 0)
+		return ret;
+	if (conf.dry_run_given) {
+		dss_msg("%d\n", (int)pid);
+		return 0;
+	}
+	ret = kill(pid, SIGTERM);
+	if (ret < 0)
+		return -ERRNO_TO_DSS_ERROR(errno);
+	return 1;
 }
 
 static void dss_get_snapshot_list(struct snapshot_list *sl)

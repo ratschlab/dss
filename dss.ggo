@@ -145,6 +145,16 @@ details="
 	received. See also the --exit-hook option.
 "
 
+groupoption "kill" K
+#~~~~~~~~~~~~~~~~~~~
+"Kill a running dss process"
+group="command"
+details="
+	This sends SIGTERM to the dss process that corresponds to the
+	given config file. If --dry-run is given, the PID of the dss
+	process is written to stdout, but no signal is sent.
+"
+
 ###############################
 section "Rsync-related options"
 ###############################
