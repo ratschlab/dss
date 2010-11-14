@@ -74,7 +74,7 @@
 
 	<a href="http://git.tuebingen.mpg.de/cgi-bin/gitweb.cgi?p=dss.git;a=snapshot;h=HEAD;sf=tgz">tarball</a>
 
-	of the current tree. If you prefer to download the tarball of
+	of the current master branch. If you prefer to download the tarball of
 	the latest release, select the corresponding <em>snapshot</em>
 	link on the
 
@@ -116,7 +116,7 @@
 
 	<p> Andr&eacute; Noll, <a
 	href="mailto:maan@systemlinux.org">maan@systemlinux.org</a>
-	</p> Comments and bug reports are welcome Please provide
+	</p> Comments and bug reports are welcome. Please provide
 	enough info such as the version of dss you are using and
 	relevant parts of the logs. Including the string [dss] in
 	the subject line is also a good idea.
