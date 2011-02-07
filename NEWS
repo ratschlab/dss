@@ -1,3 +1,9 @@
+0.1.5 (tba)
+~~~~~~~~~~~
+
+- logfile only for daemon mode
+- recycling
+
 0.1.4 (2010-11-08)
 ~~~~~~~~~~~~~~~~~~
 This version of dss contains some new features, many improvements of
