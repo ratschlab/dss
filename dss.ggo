@@ -155,6 +155,15 @@ details="
 	process is written to stdout, but no signal is sent.
 "
 
+groupoption "reload" -
+#~~~~~~~~~~~~~~~~~~~~~
+"force a running dss process to reload its config file"
+group="command"
+details="
+	This differs from --kill only in that SIGHUP rather than SIGTERM
+	is sent to the dss process.
+"
+
 ###############################
 section "Rsync-related options"
 ###############################

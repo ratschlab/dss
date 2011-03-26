@@ -172,7 +172,9 @@ static void dump_dss_config(const char *msg)
 	COMMAND(create) \
 	COMMAND(prune) \
 	COMMAND(run) \
-	COMMAND(kill)
+	COMMAND(kill) \
+	COMMAND(reload) \
+
 #define COMMAND(x) static int com_ ##x(void);
 COMMANDS
 #undef COMMAND
@@ -240,7 +242,7 @@ static char *get_config_file_name(void)
 	return config_file;
 }
 
-static int com_kill(void)
+static int send_signal(int sig)
 {
 	pid_t pid;
 	char *config_file = get_config_file_name();
@@ -253,10 +255,20 @@ static int com_kill(void)
 		dss_msg("%d\n", (int)pid);
 		return 0;
 	}
-	ret = kill(pid, SIGTERM);
+	ret = kill(pid, sig);
 	if (ret < 0)
 		return -ERRNO_TO_DSS_ERROR(errno);
 	return 1;
+}
+
+static int com_kill(void)
+{
+	return send_signal(SIGTERM);
+}
+
+static int com_reload(void)
+{
+	return send_signal(SIGHUP);
 }
 
 static void dss_get_snapshot_list(struct snapshot_list *sl)
