@@ -6,7 +6,7 @@ __must_check __malloc char *dss_strdup(const char *s);
 __must_check __malloc char *get_homedir(void);
 int dss_atoi64(const char *str, int64_t *value);
 __must_check __malloc char *dss_logname(void);
-__must_check unsigned split_args(char *args, char *** const argv_ptr, const char *delim);
+unsigned split_args(char *args, char *** const argv_ptr, const char *delim);
 
 
 /** \cond LLONG_MAX and LLONG_LIN might not be defined. */
