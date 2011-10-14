@@ -1,8 +1,15 @@
-0.1.5 (tba)
-~~~~~~~~~~~
+-----------------------
+0.1.5 (to be announced)
+-----------------------
 
-- logfile only for daemon mode
-- recycling
+- snapshot recycling: outdated, redundant and orphaned snapshots are
+  reused as the basis for new snapshots.
+
+- dss writes log messages to stderr rather than to the logfile unless
+  running in daemon mode.
+
+- Default hooks work also on systems where "/bin/true" does not exist,
+  e.g. Mac OS.
 
 0.1.4 (2010-11-08)
 ~~~~~~~~~~~~~~~~~~
