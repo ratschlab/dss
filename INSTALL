@@ -23,8 +23,8 @@ NetBSD. However, it is run-tested only on Linux.
 Also make sure that http://rsync.samba.org/ (rsync) is installed on
 your system. Version 2.6.1 or newer is required.
 
-Example:
---------
+Examples:
+---------
 
 Suppose you'd like to create snapshots of the existing directory
 
@@ -53,10 +53,33 @@ In order to print the list of all snapshots created so far, use
 
 	dss --ls
 
-Yes, it's really that easy. Of course, dss supports many more
-features and config options such as taking snapshots from remote
-hosts and several hooks that are executed on certain events, for
-example whenever a snapshot was created successfully.  Try
+Yes, it's really that easy.
+
+The second example involves a slightly more sophisticated config file.
+It instructs dss to exclude everything which matches at least one
+pattern of the given exclude file, prevents rsync from crossing file
+system boundaries and increases the number of snapshots.
+
+	source-dir "/foo/bar"
+	dest-dir "/baz/qux"
+	# exclude files matching patterns in /etc/dss.exclude
+	rsync-option "--exclude-from=/etc/dss.exclude"
+	# don't cross filesystem boundaries
+	rsync-option "--one-file-system"
+	# maintain 2^6 - 1 = 63 snaphots
+	num-intervals "6"
+
+The /etc/dss.exclude file could look like this (see rsync(1) for
+more examples)
+
+ 
+	 - /proc
+	 - /**/tmp/
+
+Note that dss supports many more features and config options such
+as taking snapshots from remote hosts and several hooks that are
+executed on certain events, for example whenever a snapshot was
+created successfully. Try
 
 	dss -h
 
