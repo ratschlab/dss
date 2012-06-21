@@ -239,7 +239,7 @@ __must_check __malloc char *dss_logname(void)
  *
  * \return The number of substrings found in \a args.
  */
-__must_check unsigned split_args(char *args, char *** const argv_ptr, const char *delim)
+unsigned split_args(char *args, char *** const argv_ptr, const char *delim)
 {
 	char *p = args;
 	char **argv;
