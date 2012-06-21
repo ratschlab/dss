@@ -1,4 +1,4 @@
-dss_objects := cmdline.o dss.o string.o fd.o exec.o signal.o daemon.o df.o time.o snap.o
+dss_objects := cmdline.o dss.o string.o fd.o exec.o signal.o daemon.o df.o time.o snap.o ipc.o
 all: dss
 man: dss.1
 

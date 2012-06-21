@@ -33,6 +33,7 @@
 #include "df.h"
 #include "time.h"
 #include "snap.h"
+#include "ipc.h"
 
 /** Command line and config file options. */
 static struct gengetopt_args_info conf;
@@ -170,7 +171,10 @@ static void dump_dss_config(const char *msg)
 	COMMAND(ls) \
 	COMMAND(create) \
 	COMMAND(prune) \
-	COMMAND(run)
+	COMMAND(run) \
+	COMMAND(kill) \
+	COMMAND(reload) \
+
 #define COMMAND(x) static int com_ ##x(void);
 COMMANDS
 #undef COMMAND
@@ -224,6 +228,47 @@ static __printf_1_2 void dss_msg(const char* fmt,...)
 	va_start(argp, fmt);
 	vfprintf(outfd, fmt, argp);
 	va_end(argp);
+}
+
+static char *get_config_file_name(void)
+{
+	char *home, *config_file;
+
+	if (conf.config_file_given)
+		return dss_strdup(conf.config_file_arg);
+	home = get_homedir();
+	config_file = make_message("%s/.dssrc", home);
+	free(home);
+	return config_file;
+}
+
+static int send_signal(int sig)
+{
+	pid_t pid;
+	char *config_file = get_config_file_name();
+	int ret = get_dss_pid(config_file, &pid);
+
+	free(config_file);
+	if (ret < 0)
+		return ret;
+	if (conf.dry_run_given) {
+		dss_msg("%d\n", (int)pid);
+		return 0;
+	}
+	ret = kill(pid, sig);
+	if (ret < 0)
+		return -ERRNO_TO_DSS_ERROR(errno);
+	return 1;
+}
+
+static int com_kill(void)
+{
+	return send_signal(SIGTERM);
+}
+
+static int com_reload(void)
+{
+	return send_signal(SIGHUP);
 }
 
 static void dss_get_snapshot_list(struct snapshot_list *sl)
@@ -906,18 +951,11 @@ static int check_config(void)
 static int parse_config_file(int override)
 {
 	int ret, config_file_exists;
-	char *config_file;
+	char *config_file = get_config_file_name();
 	struct stat statbuf;
 	char *old_logfile_arg = NULL;
 	int old_daemon_given = 0;
 
-	if (conf.config_file_given)
-		config_file = dss_strdup(conf.config_file_arg);
-	else {
-		char *home = get_homedir();
-		config_file = make_message("%s/.dssrc", home);
-		free(home);
-	}
 	if (override) { /* SIGHUP */
 		if (conf.logfile_given)
 			old_logfile_arg = dss_strdup(conf.logfile_arg);
@@ -1254,10 +1292,23 @@ static void exit_hook(int exit_code)
 	dss_exec(&pid, conf.exit_hook_arg, argv, fds);
 }
 
+static void lock_dss_or_die(void)
+{
+	char *config_file = get_config_file_name();
+	int ret = lock_dss(config_file);
+
+	free(config_file);
+	if (ret < 0) {
+		DSS_EMERG_LOG("failed to lock: %s\n", dss_strerror(-ret));
+		exit(EXIT_FAILURE);
+	}
+}
+
 static int com_run(void)
 {
 	int ret;
 
+	lock_dss_or_die();
 	if (conf.dry_run_given) {
 		DSS_ERROR_LOG("dry_run not supported by this command\n");
 		return -E_SYNTAX;
@@ -1280,6 +1331,7 @@ static int com_prune(void)
 	struct disk_space ds;
 	const char *why;
 
+	lock_dss_or_die();
 	ret = get_disk_space(".", &ds);
 	if (ret < 0)
 		return ret;
@@ -1339,6 +1391,7 @@ static int com_create(void)
 	int ret, status;
 	char **rsync_argv;
 
+	lock_dss_or_die();
 	if (conf.dry_run_given) {
 		int i;
 		char *msg = NULL;

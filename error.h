@@ -68,6 +68,7 @@ static inline char *dss_strerror(int num)
 	DSS_ERROR(SIGNAL_SIG_ERR, "signal() returned SIG_ERR") \
 	DSS_ERROR(SIGNAL, "caught terminating signal") \
 	DSS_ERROR(BUG, "values of beta might cause dom!") \
+	DSS_ERROR(NOT_RUNNING, "dss not running") \
 
 
 /**
