@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2010 Andre Noll <maan@systemlinux.org>
+ * Copyright (C) 2008-2011 Andre Noll <maan@systemlinux.org>
  *
  * Licensed under the GPL v2. For licencing details see COPYING.
  */
@@ -287,29 +287,22 @@ static int next_snapshot_is_due(void)
 	return 0;
 }
 
-static int pre_create_hook(void)
+static void pre_create_hook(void)
 {
-	int ret, fds[3] = {0, 0, 0};
-
 	assert(snapshot_creation_status == HS_READY);
 	/* make sure that the next snapshot time will be recomputed */
 	invalidate_next_snapshot_time();
 	DSS_DEBUG_LOG("executing %s\n", conf.pre_create_hook_arg);
-	ret = dss_exec_cmdline_pid(&create_pid,
-		conf.pre_create_hook_arg, fds);
-	if (ret < 0)
-		return ret;
+	dss_exec_cmdline_pid(&create_pid, conf.pre_create_hook_arg);
 	snapshot_creation_status = HS_PRE_RUNNING;
-	return ret;
 }
 
-static int pre_remove_hook(struct snapshot *s, const char *why)
+static void pre_remove_hook(struct snapshot *s, const char *why)
 {
-	int ret, fds[3] = {0, 0, 0};
 	char *cmd;
 
 	if (!s)
-		return 0;
+		return;
 	DSS_DEBUG_LOG("%s snapshot %s\n", why, s->name);
 	assert(snapshot_removal_status == HS_READY);
 	assert(remove_pid == 0);
@@ -322,18 +315,14 @@ static int pre_remove_hook(struct snapshot *s, const char *why)
 	cmd = make_message("%s %s/%s", conf.pre_remove_hook_arg,
 		conf.dest_dir_arg, s->name);
 	DSS_DEBUG_LOG("executing %s\n", cmd);
-	ret = dss_exec_cmdline_pid(&remove_pid, cmd, fds);
+	dss_exec_cmdline_pid(&remove_pid, cmd);
 	free(cmd);
-	if (ret < 0)
-		return ret;
 	snapshot_removal_status = HS_PRE_RUNNING;
-	return ret;
 }
 
 static int exec_rm(void)
 {
 	struct snapshot *s = snapshot_currently_being_removed;
-	int fds[3] = {0, 0, 0};
 	char *new_name = being_deleted_name(s);
 	char *argv[] = {"rm", "-rf", new_name, NULL};
 	int ret;
@@ -345,9 +334,7 @@ static int exec_rm(void)
 	ret = dss_rename(s->name, new_name);
 	if (ret < 0)
 		goto out;
-	ret = dss_exec(&remove_pid, argv[0], argv, fds);
-	if (ret < 0)
-		goto out;
+	dss_exec(&remove_pid, argv[0], argv);
 	snapshot_removal_status = HS_RUNNING;
 out:
 	free(new_name);
@@ -563,31 +550,24 @@ static int try_to_free_disk_space(void)
 	ret = -ERRNO_TO_DSS_ERROR(ENOSPC);
 	goto out;
 remove:
-	ret = pre_remove_hook(victim, why);
+	pre_remove_hook(victim, why);
 out:
 	free_snapshot_list(&sl);
 	return ret;
 }
 
-static int post_create_hook(void)
+static void post_create_hook(void)
 {
-	int ret, fds[3] = {0, 0, 0};
-	char *cmd;
-
-	cmd = make_message("%s %s/%s", conf.post_create_hook_arg,
+	char *cmd = make_message("%s %s/%s", conf.post_create_hook_arg,
 		conf.dest_dir_arg, path_to_last_complete_snapshot);
 	DSS_NOTICE_LOG("executing %s\n", cmd);
-	ret = dss_exec_cmdline_pid(&create_pid, cmd, fds);
+	dss_exec_cmdline_pid(&create_pid, cmd);
 	free(cmd);
-	if (ret < 0)
-		return ret;
 	snapshot_creation_status = HS_POST_RUNNING;
-	return ret;
 }
 
-static int post_remove_hook(void)
+static void post_remove_hook(void)
 {
-	int ret, fds[3] = {0, 0, 0};
 	char *cmd;
 	struct snapshot *s = snapshot_currently_being_removed;
 
@@ -596,12 +576,9 @@ static int post_remove_hook(void)
 	cmd = make_message("%s %s/%s", conf.post_remove_hook_arg,
 		conf.dest_dir_arg, s->name);
 	DSS_NOTICE_LOG("executing %s\n", cmd);
-	ret = dss_exec_cmdline_pid(&remove_pid, cmd, fds);
+	dss_exec_cmdline_pid(&remove_pid, cmd);
 	free(cmd);
-	if (ret < 0)
-		return ret;
 	snapshot_removal_status = HS_POST_RUNNING;
-	return ret;
 }
 
 static void dss_kill(pid_t pid, int sig, const char *msg)
@@ -1143,14 +1120,12 @@ static void free_rsync_argv(char **argv)
 
 static int create_snapshot(char **argv)
 {
-	int ret, fds[3] = {0, 0, 0};
+	int ret;
 
 	ret = rename_resume_snap(current_snapshot_creation_time);
 	if (ret < 0)
 		return ret;
-	ret = dss_exec(&create_pid, argv[0], argv, fds);
-	if (ret < 0)
-		return ret;
+	dss_exec(&create_pid, argv[0], argv);
 	snapshot_creation_status = HS_RUNNING;
 	return ret;
 }
@@ -1192,9 +1167,7 @@ static int select_loop(void)
 			continue;
 		}
 		if (snapshot_removal_status == HS_SUCCESS) {
-			ret = post_remove_hook();
-			if (ret < 0)
-				goto out;
+			post_remove_hook();
 			continue;
 		}
 		ret = try_to_free_disk_space();
@@ -1209,9 +1182,7 @@ static int select_loop(void)
 		case HS_READY:
 			if (!next_snapshot_is_due())
 				continue;
-			ret = pre_create_hook();
-			if (ret < 0)
-				goto out;
+			pre_create_hook();
 			continue;
 		case HS_PRE_RUNNING:
 		case HS_RUNNING:
@@ -1234,9 +1205,7 @@ static int select_loop(void)
 				goto out;
 			continue;
 		case HS_SUCCESS:
-			ret = post_create_hook();
-			if (ret < 0)
-				goto out;
+			post_create_hook();
 			continue;
 		}
 	}
@@ -1246,12 +1215,11 @@ out:
 
 static void exit_hook(int exit_code)
 {
-	int fds[3] = {0, 0, 0};
 	char *argv[] = {conf.exit_hook_arg, dss_strerror(-exit_code), NULL};
 	pid_t pid;
 
 	DSS_NOTICE_LOG("executing %s %s\n", argv[0], argv[1]);
-	dss_exec(&pid, conf.exit_hook_arg, argv, fds);
+	dss_exec(&pid, conf.exit_hook_arg, argv);
 }
 
 static int com_run(void)
@@ -1302,9 +1270,7 @@ rm:
 		ret = 0;
 		goto out;
 	}
-	ret = pre_remove_hook(victim, why);
-	if (ret < 0)
-		goto out;
+	pre_remove_hook(victim, why);
 	if (snapshot_removal_status == HS_PRE_RUNNING) {
 		ret = wait_for_remove_process();
 		if (ret < 0)
@@ -1320,9 +1286,7 @@ rm:
 		goto out;
 	if (snapshot_removal_status != HS_SUCCESS)
 		goto out;
-	ret = post_remove_hook();
-	if (ret < 0)
-		goto out;
+	post_remove_hook();
 	if (snapshot_removal_status != HS_POST_RUNNING)
 		goto out;
 	ret = wait_for_remove_process();
@@ -1354,9 +1318,7 @@ static int com_create(void)
 		free(msg);
 		return 1;
 	}
-	ret = pre_create_hook();
-	if (ret < 0)
-		return ret;
+	pre_create_hook();
 	if (create_pid) {
 		ret = wait_for_process(create_pid, &status);
 		if (ret < 0)
