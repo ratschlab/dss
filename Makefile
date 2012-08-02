@@ -2,17 +2,19 @@ dss_objects := cmdline.o dss.o string.o fd.o exec.o signal.o daemon.o df.o time.
 all: dss
 man: dss.1
 
-DEBUG_CPPFLAGS += -Wno-sign-compare -g -Wunused -Wundef -W
-DEBUG_CPPFLAGS += -Wredundant-decls
-CPPFLAGS += -Os
-CPPFLAGS += -Wall
-CPPFLAGS += -Wuninitialized
-CPPFLAGS += -Wchar-subscripts
-CPPFLAGS += -Wformat-security
-CPPFLAGS += -Werror-implicit-function-declaration
-CPPFLAGS += -Wmissing-format-attribute
-CPPFLAGS += -Wunused-macros
-CPPFLAGS += -Wbad-function-cast
+DEBUG_CFLAGS ?=
+DEBUG_CFLAGS += -Wno-sign-compare -g -Wunused -Wundef -W
+DEBUG_CFLAGS += -Wredundant-decls
+CFLAGS ?=
+CFLAGS += -Os
+CFLAGS += -Wall
+CFLAGS += -Wuninitialized
+CFLAGS += -Wchar-subscripts
+CFLAGS += -Wformat-security
+CFLAGS += -Werror-implicit-function-declaration
+CFLAGS += -Wmissing-format-attribute
+CFLAGS += -Wunused-macros
+CFLAGS += -Wbad-function-cast
 
 Makefile.deps: $(wildcard *.c *.h)
 	gcc -MM -MG *.c > $@
@@ -23,10 +25,10 @@ dss: $(dss_objects)
 	$(CC) -o $@ $(dss_objects)
 
 cmdline.o: cmdline.c cmdline.h
-	$(CC) -c $(CPPFLAGS) $<
+	$(CC) -c $(CFLAGS) $<
 
 %.o: %.c Makefile
-	$(CC) -c $(CPPFLAGS) $(DEBUG_CPPFLAGS) $<
+	$(CC) -c $(CFLAGS) $(DEBUG_CFLAGS) $<
 
 %.ppm: %.sk
 	sk2ppm $< > $@
