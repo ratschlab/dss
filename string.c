@@ -93,8 +93,9 @@ __must_check __malloc void *dss_realloc(void *p, size_t size)
  */
 __must_check __malloc void *dss_malloc(size_t size)
 {
+	void *p;
 	assert(size);
-	void *p = malloc(size);
+	p = malloc(size);
 
 	if (!p) {
 		DSS_EMERG_LOG("malloc failed (size = %zu),  aborting\n",
