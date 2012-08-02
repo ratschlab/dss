@@ -64,7 +64,7 @@ enum hook_status snapshot_removal_status;
 
 
 DEFINE_DSS_ERRLIST;
-static const char const *hook_status_description[] = {HOOK_STATUS_ARRAY};
+static const char *hook_status_description[] = {HOOK_STATUS_ARRAY};
 
 /* may be called with ds == NULL. */
 static int disk_space_low(struct disk_space *ds)
