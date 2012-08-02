@@ -324,8 +324,13 @@ static int exec_rm(void)
 {
 	struct snapshot *s = snapshot_currently_being_removed;
 	char *new_name = being_deleted_name(s);
-	char *argv[] = {"rm", "-rf", new_name, NULL};
+	char *argv[4];
 	int ret;
+
+	argv[0] = "rm";
+	argv[1] = "-rf";
+	argv[2] = new_name;
+	argv[3] = NULL;
 
 	assert(snapshot_removal_status == HS_PRE_SUCCESS);
 	assert(remove_pid == 0);
@@ -1215,8 +1220,12 @@ out:
 
 static void exit_hook(int exit_code)
 {
-	char *argv[] = {conf.exit_hook_arg, dss_strerror(-exit_code), NULL};
+	char *argv[3];
 	pid_t pid;
+
+	argv[0] = conf.exit_hook_arg;
+	argv[1] = dss_strerror(-exit_code);
+	argv[2] = NULL;
 
 	DSS_NOTICE_LOG("executing %s %s\n", argv[0], argv[1]);
 	dss_exec(&pid, conf.exit_hook_arg, argv);
