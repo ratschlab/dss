@@ -410,8 +410,6 @@ static struct snapshot *find_redundant_snapshot(struct snapshot_list *sl)
 
 		if (keep >= num)
 			missing += keep - num;
-//		DSS_DEBUG_LOG("interval %i: keep: %u, have: %u, missing: %u\n",
-//			interval, keep, num, missing);
 		if (keep + missing >= num)
 			continue;
 		/* redundant snapshot in this interval, pick snapshot with lowest score */
@@ -422,7 +420,6 @@ static struct snapshot *find_redundant_snapshot(struct snapshot_list *sl)
 				continue;
 			if (is_reference_snapshot(s))
 				continue;
-			//DSS_DEBUG_LOG("checking %s\n", s->name);
 			if (s->interval > interval) {
 				prev = s;
 				continue;
@@ -438,7 +435,6 @@ static struct snapshot *find_redundant_snapshot(struct snapshot_list *sl)
 			/* check if s is a better victim */
 			this_score = s->creation_time - prev->creation_time;
 			assert(this_score >= 0);
-			//DSS_DEBUG_LOG("%s: score %lli\n", s->name, (long long)score);
 			if (this_score < score) {
 				score = this_score;
 				victim = s;

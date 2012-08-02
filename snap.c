@@ -75,7 +75,6 @@ static int is_snapshot(const char *dirname, int64_t now, int unit_interval,
 	if (num > now)
 		return 0;
 	s->creation_time = num;
-	//DSS_DEBUG_LOG("%s start time: %lli\n", dirname, (long long)s->creation_time);
 	s->interval = (long long) ((now - s->creation_time)
 		/ unit_interval / 24 / 3600);
 	if (!strcmp(dash + 1, "incomplete")) {
