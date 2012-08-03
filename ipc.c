@@ -256,7 +256,7 @@ static inline int get_key_or_die(char *config_file)
 	return ret;
 }
 
-static int mutex_get(key_t key, int flags)
+static int mutex_get(int key, int flags)
 {
 	int ret;
 
