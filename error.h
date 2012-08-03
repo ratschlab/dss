@@ -21,20 +21,6 @@ __printf_2_3 void dss_log(int ll, const char* fmt,...);
 /** Set the system error bit for the given number. */
 #define ERRNO_TO_DSS_ERROR(num) ((num) | (1 << SYSTEM_ERROR_BIT))
 
-/** Check whether a given number is a system error number.
- *
- * \param num The value to be checked.
- * \param _errno The system error number.
- *
- * \return True if \a num is dss' representation of the system
- * error identified by \a _errno.
- */
-static inline int is_errno(int num, int _errno)
-{
-	assert(num > 0 && _errno > 0);
-	return ERRNO_TO_DSS_ERROR(_errno) == num;
-}
-
 /**
  * dss' version of strerror(3).
  *
