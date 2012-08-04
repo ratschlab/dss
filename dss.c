@@ -913,13 +913,12 @@ static int parse_config_file(int override)
 		goto out;
 	}
 	if (config_file_exists) {
-		struct cmdline_parser_params params = {
-			.override = override,
-			.initialize = 0,
-			.check_required = 1,
-			.check_ambiguity = 0,
-			.print_errors = 1
-		};
+		struct cmdline_parser_params params;
+		params.override = override;
+		params.initialize = 0;
+		params.check_required = 1;
+		params.check_ambiguity = 0;
+		params.print_errors = 1;
 		if (override) { /* invalidate all rsync options */
 			int i;
 
@@ -1024,11 +1023,13 @@ static int use_rsync_locally(char *logname)
 
 static int rename_resume_snap(int64_t creation_time)
 {
-	struct snapshot_list sl = {.num_snapshots = 0};
+	struct snapshot_list sl;
 	struct snapshot *s = NULL;
 	char *new_name = incomplete_name(creation_time);
 	int ret;
 	const char *why;
+
+	sl.num_snapshots = 0;
 
 	ret = 0;
 	if (conf.no_resume_given)
@@ -1395,13 +1396,13 @@ static int setup_signal_handling(void)
 int main(int argc, char **argv)
 {
 	int ret;
-	struct cmdline_parser_params params = {
-		.override = 0,
-		.initialize = 1,
-		.check_required = 0,
-		.check_ambiguity = 0,
-		.print_errors = 1
-	};
+	struct cmdline_parser_params params;
+
+	params.override = 0;
+	params.initialize = 1;
+	params.check_required = 0;
+	params.check_ambiguity = 0;
+	params.print_errors = 1;
 
 	cmdline_parser_ext(argc, argv, &conf, &params); /* aborts on errors */
 	ret = parse_config_file(0);
@@ -1412,13 +1413,12 @@ int main(int argc, char **argv)
 		 * Parse the command line options again, but this time check
 		 * that all required options are given.
 		 */
-		params = (struct cmdline_parser_params) {
-			.override = 1,
-			.initialize = 1,
-			.check_required = 1,
-			.check_ambiguity = 1,
-			.print_errors = 1
-		};
+		struct cmdline_parser_params params;
+		params.override = 1;
+		params.initialize = 1;
+		params.check_required = 1;
+		params.check_ambiguity = 1;
+		params.print_errors = 1;
 		cmdline_parser_ext(argc, argv, &conf, &params); /* aborts on errors */
 	}
 	if (conf.daemon_given)

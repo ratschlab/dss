@@ -155,11 +155,10 @@ static int compare_snapshots(const void *a, const void *b)
 void get_snapshot_list(struct snapshot_list *sl, int unit_interval,
 		int num_intervals)
 {
-	struct add_snapshot_data asd = {
-		.unit_interval = unit_interval,
-		.num_intervals = num_intervals,
-		.sl = sl
-	};
+	struct add_snapshot_data asd;
+	asd.unit_interval = unit_interval;
+	asd.num_intervals = num_intervals;
+	asd.sl = sl;
 	sl->now = get_current_time();
 	sl->num_snapshots = 0;
 	sl->array_size = 0;
