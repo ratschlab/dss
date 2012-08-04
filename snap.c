@@ -146,8 +146,8 @@ static int add_snapshot(const char *dirname, void *private)
 
 static int compare_snapshots(const void *a, const void *b)
 {
-	struct snapshot *s1 = *(struct snapshot **)a;
-	struct snapshot *s2 = *(struct snapshot **)b;
+	struct snapshot *s1 = *(struct snapshot * const *)a;
+	struct snapshot *s2 = *(struct snapshot * const *)b;
 	return NUM_COMPARE(s2->creation_time, s1->creation_time);
 }
 
