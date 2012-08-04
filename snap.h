@@ -19,7 +19,7 @@
 #define HSA_ITEM(x, y) x
 enum hook_status {HOOK_STATUS_ARRAY};
 #undef HSA_ITEM
-#define HSA_ITEM(x, y) [x] = y
+#define HSA_ITEM(x, y) y
 
 
 /**
