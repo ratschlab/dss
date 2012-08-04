@@ -13,7 +13,7 @@
 	HSA_ITEM(HS_RUNNING, "in progress"), \
 	HSA_ITEM(HS_SUCCESS, "process terminated successfully"), \
 	HSA_ITEM(HS_NEEDS_RESTART, "restart needed"), \
-	HSA_ITEM(HS_POST_RUNNING, "post-hook running"), \
+	HSA_ITEM(HS_POST_RUNNING, "post-hook running")
 
 
 #define HSA_ITEM(x, y) x
@@ -37,7 +37,7 @@ enum snapshot_status_flags {
 	/** The rsync process terminated successfully. */
 	SS_COMPLETE = 1,
 	/** The rm process is running to remove this snapshot. */
-	SS_BEING_DELETED = 2,
+	SS_BEING_DELETED = 2
 };
 
 /** Describes one snapshot. */
