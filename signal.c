@@ -70,7 +70,6 @@ err_out:
 static void generic_signal_handler(int s)
 {
 	write(signal_pipe[1], &s, sizeof(int));
-	//fprintf(stderr, "got sig %i\n", s);
 }
 
 /**

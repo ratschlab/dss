@@ -75,7 +75,6 @@ static int is_snapshot(const char *dirname, int64_t now, int unit_interval,
 	if (num > now)
 		return 0;
 	s->creation_time = num;
-	//DSS_DEBUG_LOG("%s start time: %lli\n", dirname, (long long)s->creation_time);
 	s->interval = (long long) ((now - s->creation_time)
 		/ unit_interval / 24 / 3600);
 	if (!strcmp(dash + 1, "incomplete")) {
@@ -146,8 +145,8 @@ static int add_snapshot(const char *dirname, void *private)
 
 static int compare_snapshots(const void *a, const void *b)
 {
-	struct snapshot *s1 = *(struct snapshot **)a;
-	struct snapshot *s2 = *(struct snapshot **)b;
+	struct snapshot *s1 = *(struct snapshot * const *)a;
+	struct snapshot *s2 = *(struct snapshot * const *)b;
 	return NUM_COMPARE(s2->creation_time, s1->creation_time);
 }
 
@@ -155,11 +154,10 @@ static int compare_snapshots(const void *a, const void *b)
 void get_snapshot_list(struct snapshot_list *sl, int unit_interval,
 		int num_intervals)
 {
-	struct add_snapshot_data asd = {
-		.unit_interval = unit_interval,
-		.num_intervals = num_intervals,
-		.sl = sl
-	};
+	struct add_snapshot_data asd;
+	asd.unit_interval = unit_interval;
+	asd.num_intervals = num_intervals;
+	asd.sl = sl;
 	sl->now = get_current_time();
 	sl->num_snapshots = 0;
 	sl->array_size = 0;
