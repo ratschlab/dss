@@ -184,36 +184,60 @@ void free_snapshot_list(struct snapshot_list *sl)
 	sl->num_snapshots = 0;
 }
 
+static int format_iso8601(char *str, size_t str_size, int64_t t)
+{
+	time_t t_copy = (time_t)t;
+	struct tm t_tm;
+
+	if (!localtime_r(&t_copy, &t_tm))
+		return -E_LOCALTIME;
+
+#ifndef DSS_TIMEZONE_FORMAT
+#  define DSS_TIMEZONE_FORMAT "%z"
+#endif
+	if (!strftime(str, str_size, "%Y-%m-%dT%H:%M:%S" DSS_TIMEZONE_FORMAT, &t_tm))
+		return -E_STRFTIME;
+
+	return 0;
+}
+
 __malloc char *incomplete_name(int64_t start)
 {
-	return make_message("%" PRId64 "-incomplete", start);
+	char start_str[200];
+	int ret = format_iso8601(start_str, sizeof(start_str), start);
+	if (ret)
+		return NULL;
+
+	return make_message("%s--incomplete", start_str);
 }
 
 __malloc char *being_deleted_name(struct snapshot *s)
 {
+	char start_str[200];
+	int ret = format_iso8601(start_str, sizeof(start_str), s->creation_time);
+	if (ret)
+		return NULL;
+
 	if (s->flags & SS_COMPLETE)
-		return make_message("%" PRId64 "-%" PRId64 ".being_deleted",
-			s->creation_time, s->completion_time);
-	return make_message("%" PRId64 "-incomplete.being_deleted", s->creation_time);
+	{
+		int duration = (int)(difftime((time_t)s->completion_time, (time_t)s->creation_time) + 0.5);
+		return make_message("%s--PT%dS.being_deleted", start_str, duration);
+	}
+
+	return make_message("%s--incomplete.being_deleted", start_str);
 }
 
 int complete_name(int64_t start, int64_t end, char **result)
 {
-	struct tm start_tm, end_tm;
-	time_t *start_seconds = (time_t *) (uint64_t *)&start; /* STFU, gcc */
-	time_t *end_seconds = (time_t *) (uint64_t *)&end; /* STFU, gcc */
-	char start_str[200], end_str[200];
+	time_t start_time = (time_t)start;
+	time_t end_time = (time_t)end;
+	int duration = (int)(difftime(end_time, start_time) + 0.5);
+	char start_str[200];
+	int ret = format_iso8601(start_str, sizeof(start_str), start);
+	if (ret)
+		return ret;
 
-	if (!localtime_r(start_seconds, &start_tm))
-		return -E_LOCALTIME;
-	if (!localtime_r(end_seconds, &end_tm))
-		return -E_LOCALTIME;
-	if (!strftime(start_str, sizeof(start_str), "%a_%b_%d_%Y_%H_%M_%S", &start_tm))
-		return -E_STRFTIME;
-	if (!strftime(end_str, sizeof(end_str), "%a_%b_%d_%Y_%H_%M_%S", &end_tm))
-		return -E_STRFTIME;
-	*result = make_message("%" PRId64 "-%" PRId64 ".%s-%s", start, end,
-		start_str, end_str);
+	*result = make_message("%s--PT%dS", start_str, duration);
 	return 1;
 }
 
