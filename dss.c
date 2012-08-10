@@ -511,7 +511,7 @@ static struct snapshot *find_outdated_snapshot(struct snapshot_list *sl)
 	return NULL;
 }
 
-struct snapshot *find_oldest_removable_snapshot(struct snapshot_list *sl)
+static struct snapshot *find_oldest_removable_snapshot(struct snapshot_list *sl)
 {
 	int i;
 	struct snapshot *s;
