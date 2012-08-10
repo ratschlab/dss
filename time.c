@@ -16,6 +16,7 @@
 #include "error.h"
 #include "string.h"
 #include "log.h"
+#include "time.h"
 
 /**
  * Convert struct timeval to milliseconds.

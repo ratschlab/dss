@@ -17,6 +17,7 @@
 #include "log.h"
 #include "error.h"
 #include "string.h"
+#include "exec.h"
 
 /**
  * Spawn a new process using execvp().

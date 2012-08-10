@@ -24,6 +24,7 @@
 #include "log.h"
 #include "string.h"
 #include "fd.h"
+#include "signal.h"
 
 static int signal_pipe[2];
 

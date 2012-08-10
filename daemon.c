@@ -22,6 +22,7 @@
 #include "error.h"
 #include "log.h"
 #include "string.h"
+#include "daemon.h"
 
 /**
  * Do the usual stuff to become a daemon.
