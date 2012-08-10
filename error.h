@@ -6,7 +6,8 @@
 extern char *dss_errlist[];
 extern char *dss_error_txt;
 
-__printf_2_3 void dss_log(int ll, const char* fmt,...);
+void dss_log_set_params(int ll, const char *file, int line, const char *func);
+__printf_1_2 void dss_log(const char* fmt,...);
 
 /**
  * This bit indicates whether a number is considered a system error number

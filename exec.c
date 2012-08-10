@@ -33,7 +33,7 @@
 void dss_exec(pid_t *pid, const char *file, char *const *const args)
 {
 	if ((*pid = fork()) < 0) {
-		DSS_EMERG_LOG("fork error: %s\n", strerror(errno));
+		DSS_EMERG_LOG(("fork error: %s\n", strerror(errno)));
 		exit(EXIT_FAILURE);
 	}
 	if (*pid) /* parent */
@@ -42,7 +42,7 @@ void dss_exec(pid_t *pid, const char *file, char *const *const args)
 	signal(SIGTERM, SIG_DFL);
 	signal(SIGCHLD, SIG_DFL);
 	execvp(file, args);
-	DSS_EMERG_LOG("execvp error: %s\n", strerror(errno));
+	DSS_EMERG_LOG(("execvp error: %s\n", strerror(errno)));
 	_exit(EXIT_FAILURE);
 }
 

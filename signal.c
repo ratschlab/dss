@@ -61,7 +61,7 @@ int signal_init(void)
 		goto err_out;
 	return signal_pipe[0];
 err_out:
-	DSS_EMERG_LOG("%s\n", dss_strerror(-ret));
+	DSS_EMERG_LOG(("%s\n", dss_strerror(-ret)));
 	exit(EXIT_FAILURE);
 }
 
@@ -96,13 +96,13 @@ int reap_child(pid_t *pid, int *status)
 	if (*pid < 0)
 		return -ERRNO_TO_DSS_ERROR(errno);
 	if (WIFEXITED(*status))
-		DSS_DEBUG_LOG("child %i exited. Exit status: %i\n", (int)*pid,
-			WEXITSTATUS(*status));
+		DSS_DEBUG_LOG(("child %i exited. Exit status: %i\n", (int)*pid,
+			WEXITSTATUS(*status)));
 	else if (WIFSIGNALED(*status))
-		DSS_DEBUG_LOG("child %i was killed by signal %i\n", (int)*pid,
-			WTERMSIG(*status));
+		DSS_DEBUG_LOG(("child %i was killed by signal %i\n", (int)*pid,
+			WTERMSIG(*status)));
 	else
-		DSS_WARNING_LOG("child %i terminated abormally\n", (int)*pid);
+		DSS_WARNING_LOG(("child %i terminated abormally\n", (int)*pid));
 	return 1;
 }
 
@@ -118,7 +118,7 @@ int reap_child(pid_t *pid, int *status)
  */
 int install_sighandler(int sig)
 {
-	DSS_DEBUG_LOG("catching signal %d\n", sig);
+	DSS_DEBUG_LOG(("catching signal %d\n", sig));
 	if (signal(sig, &generic_signal_handler) != SIG_ERR)
 		return 1;
 	return -E_SIGNAL_SIG_ERR;
@@ -140,14 +140,14 @@ int next_signal(void)
 
 	r = read(signal_pipe[0], &s, sizeof(s));
 	if (r == sizeof(s)) {
-		DSS_DEBUG_LOG("next signal: %d\n", s);
+		DSS_DEBUG_LOG(("next signal: %d\n", s));
 		return s;
 	}
 	err = errno;
 	assert(r < 0);
 	if (err == EAGAIN)
 		return 0;
-	DSS_ERROR_LOG("failed to read from signal pipe\n");
+	DSS_ERROR_LOG(("failed to read from signal pipe\n"));
 	return -ERRNO_TO_DSS_ERROR(err);
 }
 
