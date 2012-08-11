@@ -15,8 +15,8 @@
 
 
 #include "gcc-compat.h"
-#include "error.h"
-#include "string.h"
+#include "err.h"
+#include "str.h"
 
 /**
  * Call a function for each subdirectory of the current working directory.

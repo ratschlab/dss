@@ -19,9 +19,9 @@
 #include <stdio.h>
 
 #include "gcc-compat.h"
-#include "error.h"
+#include "err.h"
 #include "log.h"
-#include "string.h"
+#include "str.h"
 
 /**
  * Do the usual stuff to become a daemon.

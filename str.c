@@ -17,8 +17,8 @@
 
 #include "gcc-compat.h"
 #include "log.h"
-#include "error.h"
-#include "string.h"
+#include "err.h"
+#include "str.h"
 
 /**
  * Write a message to a dynamically allocated string.

@@ -12,8 +12,8 @@
 
 #include "gcc-compat.h"
 #include "log.h"
-#include "error.h"
-#include "string.h"
+#include "err.h"
+#include "str.h"
 #include "df.h"
 
 int get_disk_space(const char *path, struct disk_space *result)

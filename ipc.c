@@ -15,10 +15,10 @@
 #include <sys/param.h>
 
 #include "gcc-compat.h"
-#include "string.h"
+#include "str.h"
 #include "log.h"
 #include "gcc-compat.h"
-#include "error.h"
+#include "err.h"
 
 #if (defined(__GNUC__) && defined(__i386__))
 #define get16bits(d) (*((const uint16_t *) (d)))

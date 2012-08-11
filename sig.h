@@ -4,8 +4,6 @@
  * Licensed under the GPL v2. For licencing details see COPYING.
  */
 
-/** \file signal.h exported symbols from signal.c */
-
 int signal_init(void);
 int install_sighandler(int);
 int next_signal(void);

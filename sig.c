@@ -3,7 +3,6 @@
  *
  * Licensed under the GPL v2. For licencing details see COPYING.
  */
-/** \file signal.c Signal handling functions. */
 
 #include <string.h>
 #include <errno.h>
@@ -20,10 +19,10 @@
 
 
 #include "gcc-compat.h"
-#include "error.h"
+#include "err.h"
 #include "log.h"
-#include "string.h"
-#include "fd.h"
+#include "str.h"
+#include "file.h"
 
 static int signal_pipe[2];
 

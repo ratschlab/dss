@@ -15,8 +15,8 @@
 
 #include "gcc-compat.h"
 #include "log.h"
-#include "error.h"
-#include "string.h"
+#include "err.h"
+#include "str.h"
 
 /**
  * Spawn a new process using execvp().
