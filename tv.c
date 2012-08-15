@@ -4,8 +4,6 @@
  * Licensed under the GPL v2. For licencing details see COPYING.
  */
 
-/** \file time.c Helper functions for dealing with time values. */
-
 #include <sys/time.h>
 #include <time.h>
 #include <inttypes.h>
@@ -13,8 +11,8 @@
 #include <string.h>
 
 #include "gcc-compat.h"
-#include "error.h"
-#include "string.h"
+#include "err.h"
+#include "str.h"
 #include "log.h"
 #include "time.h"
 
