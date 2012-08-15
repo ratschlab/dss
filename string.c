@@ -72,8 +72,8 @@ __must_check __malloc void *dss_realloc(void *p, size_t size)
 	 */
 	assert(size);
 	if (!(p = realloc(p, size))) {
-		DSS_EMERG_LOG("realloc failed (size = %zu), aborting\n",
-			size);
+		DSS_EMERG_LOG(("realloc failed (size = %zu), aborting\n",
+			size));
 		exit(EXIT_FAILURE);
 	}
 	return p;
@@ -98,8 +98,8 @@ __must_check __malloc void *dss_malloc(size_t size)
 	p = malloc(size);
 
 	if (!p) {
-		DSS_EMERG_LOG("malloc failed (size = %zu),  aborting\n",
-			size);
+		DSS_EMERG_LOG(("malloc failed (size = %zu),  aborting\n",
+			size));
 		exit(EXIT_FAILURE);
 	}
 	return p;
@@ -145,7 +145,7 @@ __must_check __malloc char *dss_strdup(const char *s)
 
 	if ((ret = strdup(s? s: "")))
 		return ret;
-	DSS_EMERG_LOG("strdup failed, aborting\n");
+	DSS_EMERG_LOG(("strdup failed, aborting\n"));
 	exit(EXIT_FAILURE);
 }
 

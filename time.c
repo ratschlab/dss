@@ -16,6 +16,7 @@
 #include "error.h"
 #include "string.h"
 #include "log.h"
+#include "time.h"
 
 /**
  * Convert struct timeval to milliseconds.
@@ -141,6 +142,6 @@ int64_t get_current_time(void)
 {
 	time_t now;
 	time(&now);
-	DSS_DEBUG_LOG("now: %jd\n", (intmax_t)now);
+	DSS_DEBUG_LOG(("now: %jd\n", (intmax_t)now));
 	return (int64_t)now;
 }

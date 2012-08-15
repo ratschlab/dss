@@ -19,6 +19,7 @@
 #include "log.h"
 #include "gcc-compat.h"
 #include "error.h"
+#include "ipc.h"
 
 #if (defined(__GNUC__) && defined(__i386__))
 #define get16bits(d) (*((const uint16_t *) (d)))
@@ -236,11 +237,11 @@ static inline int get_key_or_die(char *config_file)
 	if (stat(config_file, &statbuf) == 0) {
 		ret = dss_realpath(config_file, &rpath);
 		if (ret < 0) {
-			DSS_EMERG_LOG("could not resolve path %s: %s\n", config_file,
-				dss_strerror(-ret));
+			DSS_EMERG_LOG(("could not resolve path %s: %s\n", config_file,
+				dss_strerror(-ret)));
 			exit(EXIT_FAILURE);
 		}
-		DSS_DEBUG_LOG("resolved path: %s\n", rpath);
+		DSS_DEBUG_LOG(("resolved path: %s\n", rpath));
 	} else
 		/*
 		 * This happens if the user did not specify a config file, and
@@ -260,7 +261,7 @@ static int mutex_get(int key, int flags)
 {
 	int ret;
 
-	DSS_DEBUG_LOG("getting semaphore 0x%x\n", key);
+	DSS_DEBUG_LOG(("getting semaphore 0x%x\n", key));
 	ret = semget(key, 2, flags);
 	if (ret < 0)
 		return -ERRNO_TO_DSS_ERROR(errno);
@@ -271,7 +272,7 @@ static int do_semop(int id, struct sembuf *sops, int num)
 {
 	int ret;
 
-	DSS_DEBUG_LOG("calling semop\n");
+	DSS_DEBUG_LOG(("calling semop\n"));
 	do {
 		ret = semop(id, sops, num);
 		if (ret >= 0)
@@ -282,31 +283,27 @@ static int do_semop(int id, struct sembuf *sops, int num)
 
 static int mutex_lock(int id)
 {
+	struct sembuf sops[4];
 	int ret;
 
-	DSS_DEBUG_LOG("locking\n");
-	struct sembuf sops[4] = {
-		{
-			.sem_num = 0,
-			.sem_op = 0,
-			.sem_flg = SEM_UNDO | IPC_NOWAIT
-		},
-		{
-			.sem_num = 0,
-			.sem_op = 1,
-			.sem_flg = SEM_UNDO | IPC_NOWAIT
-		},
-		{
-			.sem_num = 1,
-			.sem_op = 0,
-			.sem_flg = SEM_UNDO | IPC_NOWAIT
-		},
-		{
-			.sem_num = 1,
-			.sem_op = 1,
-			.sem_flg = SEM_UNDO | IPC_NOWAIT
-		}
-	};
+	DSS_DEBUG_LOG(("locking\n"));
+
+	sops[0].sem_num = 0;
+	sops[0].sem_op = 0;
+	sops[0].sem_flg = SEM_UNDO | IPC_NOWAIT;
+
+	sops[1].sem_num = 0;
+	sops[1].sem_op = 1;
+	sops[1].sem_flg = SEM_UNDO | IPC_NOWAIT;
+
+	sops[2].sem_num = 1;
+	sops[2].sem_op = 0;
+	sops[2].sem_flg = SEM_UNDO | IPC_NOWAIT;
+
+	sops[3].sem_num = 1;
+	sops[3].sem_op = 1;
+	sops[3].sem_flg = SEM_UNDO | IPC_NOWAIT;
+
 	ret = do_semop(id, sops, 4);
 	if (ret < 0)
 		return -ERRNO_TO_DSS_ERROR(errno);
@@ -315,21 +312,19 @@ static int mutex_lock(int id)
 
 static int mutex_try_lock(int id)
 {
+	struct sembuf sops[2];
 	int ret;
 
-	DSS_DEBUG_LOG("trying to lock\n");
-	struct sembuf sops[2] = {
-		{
-			.sem_num = 0,
-			.sem_op = 0,
-			.sem_flg = SEM_UNDO | IPC_NOWAIT
-		},
-		{
-			.sem_num = 0,
-			.sem_op = 1,
-			.sem_flg = SEM_UNDO | IPC_NOWAIT
-		}
-	};
+	DSS_DEBUG_LOG(("trying to lock\n"));
+
+	sops[0].sem_num = 0;
+	sops[0].sem_op = 0;
+	sops[0].sem_flg = SEM_UNDO | IPC_NOWAIT;
+
+	sops[1].sem_num = 0;
+	sops[1].sem_op = 1;
+	sops[1].sem_flg = SEM_UNDO | IPC_NOWAIT;
+
 	ret = do_semop(id, sops, 2);
 	if (ret < 0)
 		return -ERRNO_TO_DSS_ERROR(errno);

@@ -22,6 +22,7 @@
 #include "error.h"
 #include "log.h"
 #include "string.h"
+#include "daemon.h"
 
 /**
  * Do the usual stuff to become a daemon.
@@ -35,7 +36,7 @@ void daemon_init(void)
 	pid_t pid;
 	int null;
 
-	DSS_INFO_LOG("daemonizing\n");
+	DSS_INFO_LOG(("daemonizing\n"));
 	pid = fork();
 	if (pid < 0)
 		goto err;
@@ -59,7 +60,7 @@ void daemon_init(void)
 	close(null);
 	return;
 err:
-	DSS_EMERG_LOG("fatal: %s\n", strerror(errno));
+	DSS_EMERG_LOG(("fatal: %s\n", strerror(errno)));
 	exit(EXIT_FAILURE);
 }
 
@@ -77,8 +78,8 @@ FILE *open_log(const char *logfile_name)
 	assert(logfile_name);
 	logfile = fopen(logfile_name, "a");
 	if (!logfile) {
-		DSS_EMERG_LOG("can not open %s: %s\n", logfile_name,
-			strerror(errno));
+		DSS_EMERG_LOG(("can not open %s: %s\n", logfile_name,
+			strerror(errno)));
 		exit(EXIT_FAILURE);
 	}
 	setlinebuf(logfile);
@@ -96,7 +97,7 @@ void close_log(FILE* logfile)
 {
 	if (!logfile)
 		return;
-	DSS_INFO_LOG("closing logfile\n");
+	DSS_INFO_LOG(("closing logfile\n"));
 	fclose(logfile);
 }
 
@@ -105,6 +106,6 @@ void close_log(FILE* logfile)
  */
 void log_welcome(int loglevel)
 {
-	DSS_INFO_LOG("***** welcome to dss ******\n");
-	DSS_DEBUG_LOG("using loglevel %d\n", loglevel);
+	DSS_INFO_LOG(("***** welcome to dss ******\n"));
+	DSS_DEBUG_LOG(("using loglevel %d\n", loglevel));
 }

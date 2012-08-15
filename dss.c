@@ -105,12 +105,12 @@ static void dump_dss_config(const char *msg)
 	fprintf(log, "\n*** disk space ***\n\n");
 	ret = get_disk_space(".", &ds);
 	if (ret >= 0) {
-		DSS_INFO_LOG("disk space low: %s\n", disk_space_low(&ds)?
-			"yes" : "no");
+		DSS_INFO_LOG(("disk space low: %s\n", disk_space_low(&ds)?
+			"yes" : "no"));
 		log_disk_space(&ds);
 	} else
-		DSS_ERROR_LOG("can not get free disk space: %s\n",
-			dss_strerror(-ret));
+		DSS_ERROR_LOG(("can not get free disk space: %s\n",
+			dss_strerror(-ret)));
 
 	/* we continue on errors from get_disk_space */
 
@@ -182,11 +182,24 @@ COMMANDS
 static int call_command_handler(void)
 {
 	COMMANDS
-	DSS_EMERG_LOG("BUG: did not find command handler\n");
+	DSS_EMERG_LOG(("BUG: did not find command handler\n"));
 	return -E_BUG;
 }
 #undef COMMAND
 #undef COMMANDS
+
+static int loglevel = -1;
+static const char *location_file = NULL;
+static int         location_line = -1;
+static const char *location_func = NULL;
+
+void dss_log_set_params(int ll, const char *file, int line, const char *func)
+{
+	loglevel = ll;
+	location_file = file;
+	location_line = line;
+	location_func = func;
+}
 
 /**
  * The log function of dss.
@@ -196,7 +209,7 @@ static int call_command_handler(void)
  *
  * All DSS_XXX_LOG() macros use this function.
  */
-__printf_2_3 void dss_log(int ll, const char* fmt,...)
+__printf_1_2 void dss_log(const char* fmt,...)
 {
 	va_list argp;
 	FILE *outfd;
@@ -204,7 +217,7 @@ __printf_2_3 void dss_log(int ll, const char* fmt,...)
 	time_t t1;
 	char str[255] = "";
 
-	if (ll < conf.loglevel_arg)
+	if (loglevel < conf.loglevel_arg)
 		return;
 	outfd = logfile? logfile : stderr;
 	time(&t1);
@@ -212,7 +225,12 @@ __printf_2_3 void dss_log(int ll, const char* fmt,...)
 	strftime(str, sizeof(str), "%b %d %H:%M:%S", tm);
 	fprintf(outfd, "%s ", str);
 	if (conf.loglevel_arg <= INFO)
-		fprintf(outfd, "%i: ", ll);
+		fprintf(outfd, "%i: ", loglevel);
+#ifdef DSS_NO_FUNC_NAMES
+	fprintf(outfd, "%s:%d: ", location_file, location_line);
+#else
+	fprintf(outfd, "%s: ", location_func);
+#endif
 	va_start(argp, fmt);
 	vfprintf(outfd, fmt, argp);
 	va_end(argp);
@@ -324,11 +342,11 @@ static int next_snapshot_is_due(void)
 	if (!next_snapshot_time_is_valid())
 		next_snapshot_time = compute_next_snapshot_time();
 	if (next_snapshot_time <= now) {
-		DSS_DEBUG_LOG("next snapshot: now\n");
+		DSS_DEBUG_LOG(("next snapshot: now\n"));
 		return 1;
 	}
-	DSS_DEBUG_LOG("next snapshot due in %" PRId64 " seconds\n",
-		next_snapshot_time - now);
+	DSS_DEBUG_LOG(("next snapshot due in %" PRId64 " seconds\n",
+		next_snapshot_time - now));
 	return 0;
 }
 
@@ -337,7 +355,7 @@ static void pre_create_hook(void)
 	assert(snapshot_creation_status == HS_READY);
 	/* make sure that the next snapshot time will be recomputed */
 	invalidate_next_snapshot_time();
-	DSS_DEBUG_LOG("executing %s\n", conf.pre_create_hook_arg);
+	DSS_DEBUG_LOG(("executing %s\n", conf.pre_create_hook_arg));
 	dss_exec_cmdline_pid(&create_pid, conf.pre_create_hook_arg);
 	snapshot_creation_status = HS_PRE_RUNNING;
 }
@@ -348,7 +366,7 @@ static void pre_remove_hook(struct snapshot *s, const char *why)
 
 	if (!s)
 		return;
-	DSS_DEBUG_LOG("%s snapshot %s\n", why, s->name);
+	DSS_DEBUG_LOG(("%s snapshot %s\n", why, s->name));
 	assert(snapshot_removal_status == HS_READY);
 	assert(remove_pid == 0);
 	assert(!snapshot_currently_being_removed);
@@ -359,7 +377,7 @@ static void pre_remove_hook(struct snapshot *s, const char *why)
 
 	cmd = make_message("%s %s/%s", conf.pre_remove_hook_arg,
 		conf.dest_dir_arg, s->name);
-	DSS_DEBUG_LOG("executing %s\n", cmd);
+	DSS_DEBUG_LOG(("executing %s\n", cmd));
 	dss_exec_cmdline_pid(&remove_pid, cmd);
 	free(cmd);
 	snapshot_removal_status = HS_PRE_RUNNING;
@@ -380,7 +398,7 @@ static int exec_rm(void)
 	assert(snapshot_removal_status == HS_PRE_SUCCESS);
 	assert(remove_pid == 0);
 
-	DSS_NOTICE_LOG("removing %s (interval = %i)\n", s->name, s->interval);
+	DSS_NOTICE_LOG(("removing %s (interval = %i)\n", s->name, s->interval));
 	ret = dss_rename(s->name, new_name);
 	if (ret < 0)
 		goto out;
@@ -401,7 +419,7 @@ static struct snapshot *find_orphaned_snapshot(struct snapshot_list *sl)
 	struct snapshot *s;
 	int i;
 
-	DSS_DEBUG_LOG("looking for orphaned snapshots\n");
+	DSS_DEBUG_LOG(("looking for orphaned snapshots\n"));
 	FOR_EACH_SNAPSHOT(s, i, sl) {
 		if (snapshot_is_being_created(s))
 			continue;
@@ -446,7 +464,7 @@ static struct snapshot *find_redundant_snapshot(struct snapshot_list *sl)
 	struct snapshot *s;
 	unsigned missing = 0;
 
-	DSS_DEBUG_LOG("looking for intervals containing too many snapshots\n");
+	DSS_DEBUG_LOG(("looking for intervals containing too many snapshots\n"));
 	for (interval = conf.num_intervals_arg - 1; interval >= 0; interval--) {
 		unsigned keep = desired_number_of_snapshots(interval, conf.num_intervals_arg);
 		unsigned num = sl->interval_count[interval];
@@ -497,8 +515,8 @@ static struct snapshot *find_outdated_snapshot(struct snapshot_list *sl)
 	int i;
 	struct snapshot *s;
 
-	DSS_DEBUG_LOG("looking for snapshots belonging to intervals >= %d\n",
-		conf.num_intervals_arg);
+	DSS_DEBUG_LOG(("looking for snapshots belonging to intervals >= %d\n",
+		conf.num_intervals_arg));
 	FOR_EACH_SNAPSHOT(s, i, sl) {
 		if (snapshot_is_being_created(s))
 			continue;
@@ -511,7 +529,7 @@ static struct snapshot *find_outdated_snapshot(struct snapshot_list *sl)
 	return NULL;
 }
 
-struct snapshot *find_oldest_removable_snapshot(struct snapshot_list *sl)
+static struct snapshot *find_oldest_removable_snapshot(struct snapshot_list *sl)
 {
 	int i;
 	struct snapshot *s;
@@ -520,7 +538,7 @@ struct snapshot *find_oldest_removable_snapshot(struct snapshot_list *sl)
 			continue;
 		if (is_reference_snapshot(s))
 			continue;
-		DSS_INFO_LOG("oldest removable snapshot: %s\n", s->name);
+		DSS_INFO_LOG(("oldest removable snapshot: %s\n", s->name));
 		return s;
 	}
 	return NULL;
@@ -539,8 +557,8 @@ static int rename_incomplete_snapshot(int64_t start)
 	old_name = incomplete_name(start);
 	ret = dss_rename(old_name, path_to_last_complete_snapshot);
 	if (ret >= 0)
-		DSS_NOTICE_LOG("%s -> %s\n", old_name,
-			path_to_last_complete_snapshot);
+		DSS_NOTICE_LOG(("%s -> %s\n", old_name,
+			path_to_last_complete_snapshot));
 	free(old_name);
 	return ret;
 }
@@ -588,11 +606,11 @@ static int try_to_free_disk_space(void)
 	victim = find_orphaned_snapshot(&sl);
 	if (victim)
 		goto remove;
-	DSS_WARNING_LOG("disk space low and nothing obvious to remove\n");
+	DSS_WARNING_LOG(("disk space low and nothing obvious to remove\n"));
 	victim = find_oldest_removable_snapshot(&sl);
 	if (victim)
 		goto remove;
-	DSS_CRIT_LOG("uhuhu: disk space low and nothing to remove\n");
+	DSS_CRIT_LOG(("uhuhu: disk space low and nothing to remove\n"));
 	ret = -ERRNO_TO_DSS_ERROR(ENOSPC);
 	goto out;
 remove:
@@ -606,7 +624,7 @@ static void post_create_hook(void)
 {
 	char *cmd = make_message("%s %s/%s", conf.post_create_hook_arg,
 		conf.dest_dir_arg, path_to_last_complete_snapshot);
-	DSS_NOTICE_LOG("executing %s\n", cmd);
+	DSS_NOTICE_LOG(("executing %s\n", cmd));
 	dss_exec_cmdline_pid(&create_pid, cmd);
 	free(cmd);
 	snapshot_creation_status = HS_POST_RUNNING;
@@ -621,7 +639,7 @@ static void post_remove_hook(void)
 
 	cmd = make_message("%s %s/%s", conf.post_remove_hook_arg,
 		conf.dest_dir_arg, s->name);
-	DSS_NOTICE_LOG("executing %s\n", cmd);
+	DSS_NOTICE_LOG(("executing %s\n", cmd));
 	dss_exec_cmdline_pid(&remove_pid, cmd);
 	free(cmd);
 	snapshot_removal_status = HS_POST_RUNNING;
@@ -647,13 +665,13 @@ static void dss_kill(pid_t pid, int sig, const char *msg)
 	else process_name = "??????";
 
 	if (msg)
-		DSS_INFO_LOG("%s\n", msg);
-	DSS_DEBUG_LOG("sending signal %d (%s) to pid %d (%s process)\n",
-		sig, signame, (int)pid, process_name);
+		DSS_INFO_LOG(("%s\n", msg));
+	DSS_DEBUG_LOG(("sending signal %d (%s) to pid %d (%s process)\n",
+		sig, signame, (int)pid, process_name));
 	if (kill(pid, sig) >= 0)
 		return;
-	DSS_INFO_LOG("failed to send signal %d (%s) to pid %d (%s process)\n",
-		sig, signame, (int)pid, process_name);
+	DSS_INFO_LOG(("failed to send signal %d (%s) to pid %d (%s process)\n",
+		sig, signame, (int)pid, process_name));
 }
 
 static void stop_create_process(void)
@@ -678,20 +696,20 @@ static void restart_create_process(void)
 static void log_termination_msg(pid_t pid, int status)
 {
 	if (WIFEXITED(status))
-		DSS_INFO_LOG("child %i exited. Exit status: %i\n", (int)pid,
-			WEXITSTATUS(status));
+		DSS_INFO_LOG(("child %i exited. Exit status: %i\n", (int)pid,
+			WEXITSTATUS(status)));
 	else if (WIFSIGNALED(status))
-		DSS_NOTICE_LOG("child %i was killed by signal %i\n", (int)pid,
-			WTERMSIG(status));
+		DSS_NOTICE_LOG(("child %i was killed by signal %i\n", (int)pid,
+			WTERMSIG(status)));
 	else
-		DSS_WARNING_LOG("child %i terminated abormally\n", (int)pid);
+		DSS_WARNING_LOG(("child %i terminated abormally\n", (int)pid));
 }
 
 static int wait_for_process(pid_t pid, int *status)
 {
 	int ret;
 
-	DSS_DEBUG_LOG("Waiting for process %d to terminate\n", (int)pid);
+	DSS_DEBUG_LOG(("Waiting for process %d to terminate\n", (int)pid));
 	for (;;) {
 		fd_set rfds;
 
@@ -716,7 +734,7 @@ static int wait_for_process(pid_t pid, int *status)
 		dss_kill(pid, SIGTERM, "killing child process");
 	}
 	if (ret < 0)
-		DSS_ERROR_LOG("failed to wait for process %d\n", (int)pid);
+		DSS_ERROR_LOG(("failed to wait for process %d\n", (int)pid));
 	else
 		log_termination_msg(pid, *status);
 	return ret;
@@ -803,7 +821,7 @@ static int handle_rsync_exit(int status)
 	int es, ret;
 
 	if (!WIFEXITED(status)) {
-		DSS_ERROR_LOG("rsync process %d died involuntary\n", (int)create_pid);
+		DSS_ERROR_LOG(("rsync process %d died involuntary\n", (int)create_pid));
 		ret = -E_INVOLUNTARY_EXIT;
 		snapshot_creation_status = HS_READY;
 		goto out;
@@ -815,15 +833,15 @@ static int handle_rsync_exit(int status)
 	 * 13: Errors with program diagnostics
 	 */
 	if (es == 12 || es == 13) {
-		DSS_WARNING_LOG("rsync process %d returned %d -- restarting\n",
-			(int)create_pid, es);
+		DSS_WARNING_LOG(("rsync process %d returned %d -- restarting\n",
+			(int)create_pid, es));
 		snapshot_creation_status = HS_NEEDS_RESTART;
 		next_snapshot_time = get_current_time() + 60;
 		ret = 1;
 		goto out;
 	}
 	if (es != 0 && es != 23 && es != 24) {
-		DSS_ERROR_LOG("rsync process %d returned %d\n", (int)create_pid, es);
+		DSS_ERROR_LOG(("rsync process %d returned %d\n", (int)create_pid, es));
 		ret = -E_BAD_EXIT_CODE;
 		snapshot_creation_status = HS_READY;
 		goto out;
@@ -852,9 +870,9 @@ static int handle_pre_create_hook_exit(int status)
 	es = WEXITSTATUS(status);
 	if (es) {
 		if (!warn_count--) {
-			DSS_NOTICE_LOG("pre_create_hook %s returned %d\n",
-				conf.pre_create_hook_arg, es);
-			DSS_NOTICE_LOG("deferring snapshot creation...\n");
+			DSS_NOTICE_LOG(("pre_create_hook %s returned %d\n",
+				conf.pre_create_hook_arg, es));
+			DSS_NOTICE_LOG(("deferring snapshot creation...\n"));
 			warn_count = 60; /* warn only once per hour */
 		}
 		next_snapshot_time = get_current_time() + 60;
@@ -890,8 +908,8 @@ static int handle_sigchld(void)
 			ret = 1;
 			break;
 		default:
-			DSS_EMERG_LOG("BUG: create can't die in status %d\n",
-				snapshot_creation_status);
+			DSS_EMERG_LOG(("BUG: create can't die in status %d\n",
+				snapshot_creation_status));
 			return -E_BUG;
 		}
 		create_pid = 0;
@@ -903,22 +921,22 @@ static int handle_sigchld(void)
 			return ret;
 		return ret;
 	}
-	DSS_EMERG_LOG("BUG: unknown process %d died\n", (int)pid);
+	DSS_EMERG_LOG(("BUG: unknown process %d died\n", (int)pid));
 	return -E_BUG;
 }
 
 static int check_config(void)
 {
 	if (conf.unit_interval_arg <= 0) {
-		DSS_ERROR_LOG("bad unit interval: %i\n", conf.unit_interval_arg);
+		DSS_ERROR_LOG(("bad unit interval: %i\n", conf.unit_interval_arg));
 		return -E_INVALID_NUMBER;
 	}
-	DSS_DEBUG_LOG("unit interval: %i day(s)\n", conf.unit_interval_arg);
+	DSS_DEBUG_LOG(("unit interval: %i day(s)\n", conf.unit_interval_arg));
 	if (conf.num_intervals_arg <= 0) {
-		DSS_ERROR_LOG("bad number of intervals  %i\n", conf.num_intervals_arg);
+		DSS_ERROR_LOG(("bad number of intervals  %i\n", conf.num_intervals_arg));
 		return -E_INVALID_NUMBER;
 	}
-	DSS_DEBUG_LOG("number of intervals: %i\n", conf.num_intervals_arg);
+	DSS_DEBUG_LOG(("number of intervals: %i\n", conf.num_intervals_arg));
 	return 1;
 }
 
@@ -943,7 +961,7 @@ static int parse_config_file(int override)
 	config_file_exists = !stat(config_file, &statbuf);
 	if (!config_file_exists && conf.config_file_given) {
 		ret = -ERRNO_TO_DSS_ERROR(errno);
-		DSS_ERROR_LOG("failed to stat config file %s\n", config_file);
+		DSS_ERROR_LOG(("failed to stat config file %s\n", config_file));
 		goto out;
 	}
 	if (config_file_exists) {
@@ -983,18 +1001,18 @@ static int parse_config_file(int override)
 		logfile = open_log(conf.logfile_arg);
 		log_welcome(conf.loglevel_arg);
 	}
-	DSS_DEBUG_LOG("loglevel: %d\n", conf.loglevel_arg);
+	DSS_DEBUG_LOG(("loglevel: %d\n", conf.loglevel_arg));
 	ret = config_file_exists;
 out:
 	free(config_file);
 	if (ret < 0)
-		DSS_EMERG_LOG("%s\n", dss_strerror(-ret));
+		DSS_EMERG_LOG(("%s\n", dss_strerror(-ret)));
 	return ret;
 }
 
 static int change_to_dest_dir(void)
 {
-	DSS_INFO_LOG("changing cwd to %s\n", conf.dest_dir_arg);
+	DSS_INFO_LOG(("changing cwd to %s\n", conf.dest_dir_arg));
 	return dss_chdir(conf.dest_dir_arg);
 }
 
@@ -1002,7 +1020,7 @@ static int handle_sighup(void)
 {
 	int ret;
 
-	DSS_NOTICE_LOG("SIGHUP, re-reading config\n");
+	DSS_NOTICE_LOG(("SIGHUP, re-reading config\n"));
 	dump_dss_config("old");
 	ret = parse_config_file(1);
 	if (ret < 0)
@@ -1036,7 +1054,7 @@ static int handle_signal(void)
 	}
 out:
 	if (ret < 0)
-		DSS_ERROR_LOG("%s\n", dss_strerror(-ret));
+		DSS_ERROR_LOG(("%s\n", dss_strerror(-ret)));
 	return ret;
 }
 
@@ -1099,11 +1117,11 @@ static int rename_resume_snap(int64_t creation_time)
 	s = find_orphaned_snapshot(&sl);
 out:
 	if (s) {
-		DSS_INFO_LOG("reusing %s snapshot %s\n", why, s->name);
+		DSS_INFO_LOG(("reusing %s snapshot %s\n", why, s->name));
 		ret = dss_rename(s->name, new_name);
 	}
 	if (ret >= 0)
-		DSS_NOTICE_LOG("creating new snapshot %s\n", new_name);
+		DSS_NOTICE_LOG(("creating new snapshot %s\n", new_name));
 	free(new_name);
 	free_snapshot_list(&sl);
 	return ret;
@@ -1127,11 +1145,11 @@ static void create_rsync_argv(char ***argv, int64_t *num)
 	for (j = 0; j < conf.rsync_option_given; j++)
 		(*argv)[i++] = dss_strdup(conf.rsync_option_arg[j]);
 	if (name_of_reference_snapshot) {
-		DSS_INFO_LOG("using %s as reference\n", name_of_reference_snapshot);
+		DSS_INFO_LOG(("using %s as reference\n", name_of_reference_snapshot));
 		(*argv)[i++] = make_message("--link-dest=../%s",
 			name_of_reference_snapshot);
 	} else
-		DSS_INFO_LOG("no suitable reference snapshot found\n");
+		DSS_INFO_LOG(("no suitable reference snapshot found\n"));
 	logname = dss_logname();
 	if (use_rsync_locally(logname))
 		(*argv)[i++] = dss_strdup(conf.source_dir_arg);
@@ -1144,7 +1162,7 @@ static void create_rsync_argv(char ***argv, int64_t *num)
 	(*argv)[i++] = incomplete_name(*num);
 	(*argv)[i++] = NULL;
 	for (j = 0; j < i; j++)
-		DSS_DEBUG_LOG("argv[%d] = %s\n", j, (*argv)[j]);
+		DSS_DEBUG_LOG(("argv[%d] = %s\n", j, (*argv)[j]));
 }
 
 static void free_rsync_argv(char **argv)
@@ -1262,7 +1280,7 @@ static void exit_hook(int exit_code)
 	argv[1] = dss_strerror(-exit_code);
 	argv[2] = NULL;
 
-	DSS_NOTICE_LOG("executing %s %s\n", argv[0], argv[1]);
+	DSS_NOTICE_LOG(("executing %s %s\n", argv[0], argv[1]));
 	dss_exec(&pid, conf.exit_hook_arg, argv);
 }
 
@@ -1273,7 +1291,7 @@ static void lock_dss_or_die(void)
 
 	free(config_file);
 	if (ret < 0) {
-		DSS_EMERG_LOG("failed to lock: %s\n", dss_strerror(-ret));
+		DSS_EMERG_LOG(("failed to lock: %s\n", dss_strerror(-ret)));
 		exit(EXIT_FAILURE);
 	}
 }
@@ -1284,7 +1302,7 @@ static int com_run(void)
 
 	lock_dss_or_die();
 	if (conf.dry_run_given) {
-		DSS_ERROR_LOG("dry_run not supported by this command\n");
+		DSS_ERROR_LOG(("dry_run not supported by this command\n"));
 		return -E_SYNTAX;
 	}
 	ret = install_sighandler(SIGHUP);
@@ -1425,7 +1443,7 @@ static int setup_signal_handling(void)
 {
 	int ret;
 
-	DSS_INFO_LOG("setting up signal handlers\n");
+	DSS_INFO_LOG(("setting up signal handlers\n"));
 	signal_pipe = signal_init(); /* always successful */
 	ret = install_sighandler(SIGINT);
 	if (ret < 0)
@@ -1482,6 +1500,6 @@ int main(int argc, char **argv)
 	ret = call_command_handler();
 out:
 	if (ret < 0)
-		DSS_EMERG_LOG("%s\n", dss_strerror(-ret));
+		DSS_EMERG_LOG(("%s\n", dss_strerror(-ret)));
 	exit(ret >= 0? EXIT_SUCCESS : EXIT_FAILURE);
 }
