@@ -65,7 +65,7 @@ enum hook_status snapshot_removal_status;
 
 
 DEFINE_DSS_ERRLIST;
-static const char const *hook_status_description[] = {HOOK_STATUS_ARRAY};
+static const char *hook_status_description[] = {HOOK_STATUS_ARRAY};
 
 /* may be called with ds == NULL. */
 static int disk_space_low(struct disk_space *ds)
@@ -369,8 +369,13 @@ static int exec_rm(void)
 {
 	struct snapshot *s = snapshot_currently_being_removed;
 	char *new_name = being_deleted_name(s);
-	char *argv[] = {"rm", "-rf", new_name, NULL};
+	char *argv[4];
 	int ret;
+
+	argv[0] = "rm";
+	argv[1] = "-rf";
+	argv[2] = new_name;
+	argv[3] = NULL;
 
 	assert(snapshot_removal_status == HS_PRE_SUCCESS);
 	assert(remove_pid == 0);
@@ -450,8 +455,6 @@ static struct snapshot *find_redundant_snapshot(struct snapshot_list *sl)
 
 		if (keep >= num)
 			missing += keep - num;
-//		DSS_DEBUG_LOG("interval %i: keep: %u, have: %u, missing: %u\n",
-//			interval, keep, num, missing);
 		if (keep + missing >= num)
 			continue;
 		/* redundant snapshot in this interval, pick snapshot with lowest score */
@@ -462,7 +465,6 @@ static struct snapshot *find_redundant_snapshot(struct snapshot_list *sl)
 				continue;
 			if (is_reference_snapshot(s))
 				continue;
-			//DSS_DEBUG_LOG("checking %s\n", s->name);
 			if (s->interval > interval) {
 				prev = s;
 				continue;
@@ -478,7 +480,6 @@ static struct snapshot *find_redundant_snapshot(struct snapshot_list *sl)
 			/* check if s is a better victim */
 			this_score = s->creation_time - prev->creation_time;
 			assert(this_score >= 0);
-			//DSS_DEBUG_LOG("%s: score %lli\n", s->name, (long long)score);
 			if (this_score < score) {
 				score = this_score;
 				victim = s;
@@ -946,13 +947,12 @@ static int parse_config_file(int override)
 		goto out;
 	}
 	if (config_file_exists) {
-		struct cmdline_parser_params params = {
-			.override = override,
-			.initialize = 0,
-			.check_required = 1,
-			.check_ambiguity = 0,
-			.print_errors = 1
-		};
+		struct cmdline_parser_params params;
+		params.override = override;
+		params.initialize = 0;
+		params.check_required = 1;
+		params.check_ambiguity = 0;
+		params.print_errors = 1;
 		if (override) { /* invalidate all rsync options */
 			int i;
 
@@ -1057,11 +1057,13 @@ static int use_rsync_locally(char *logname)
 
 static int rename_resume_snap(int64_t creation_time)
 {
-	struct snapshot_list sl = {.num_snapshots = 0};
+	struct snapshot_list sl;
 	struct snapshot *s = NULL;
 	char *new_name = incomplete_name(creation_time);
 	int ret;
 	const char *why;
+
+	sl.num_snapshots = 0;
 
 	ret = 0;
 	if (conf.no_resume_given)
@@ -1253,8 +1255,12 @@ out:
 
 static void exit_hook(int exit_code)
 {
-	char *argv[] = {conf.exit_hook_arg, dss_strerror(-exit_code), NULL};
+	char *argv[3];
 	pid_t pid;
+
+	argv[0] = conf.exit_hook_arg;
+	argv[1] = dss_strerror(-exit_code);
+	argv[2] = NULL;
 
 	DSS_NOTICE_LOG("executing %s %s\n", argv[0], argv[1]);
 	dss_exec(&pid, conf.exit_hook_arg, argv);
@@ -1439,13 +1445,13 @@ static int setup_signal_handling(void)
 int main(int argc, char **argv)
 {
 	int ret;
-	struct cmdline_parser_params params = {
-		.override = 0,
-		.initialize = 1,
-		.check_required = 0,
-		.check_ambiguity = 0,
-		.print_errors = 1
-	};
+	struct cmdline_parser_params params;
+
+	params.override = 0;
+	params.initialize = 1;
+	params.check_required = 0;
+	params.check_ambiguity = 0;
+	params.print_errors = 1;
 
 	cmdline_parser_ext(argc, argv, &conf, &params); /* aborts on errors */
 	ret = parse_config_file(0);
@@ -1456,13 +1462,12 @@ int main(int argc, char **argv)
 		 * Parse the command line options again, but this time check
 		 * that all required options are given.
 		 */
-		params = (struct cmdline_parser_params) {
-			.override = 1,
-			.initialize = 1,
-			.check_required = 1,
-			.check_ambiguity = 1,
-			.print_errors = 1
-		};
+		struct cmdline_parser_params params;
+		params.override = 1;
+		params.initialize = 1;
+		params.check_required = 1;
+		params.check_ambiguity = 1;
+		params.print_errors = 1;
 		cmdline_parser_ext(argc, argv, &conf, &params); /* aborts on errors */
 	}
 	if (conf.daemon_given)
