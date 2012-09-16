@@ -14,11 +14,11 @@
 #include <sys/time.h>
 
 #include "gcc-compat.h"
-#include "error.h"
+#include "err.h"
 #include "snap.h"
-#include "string.h"
-#include "time.h"
-#include "fd.h"
+#include "str.h"
+#include "tv.h"
+#include "file.h"
 
 /**
  * Wrapper for isdigit.
