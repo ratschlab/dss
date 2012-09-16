@@ -30,10 +30,8 @@ cmdline.o: cmdline.c cmdline.h
 %.o: %.c Makefile
 	$(CC) -c $(CFLAGS) $(DEBUG_CFLAGS) $<
 
-%.ppm: %.sk
-	sk2ppm $< > $@
-%.png: %.ppm
-	convert $< $@
+%.png: %.dia
+	dia -e $@ -t png $<
 
 cmdline.c cmdline.h: dss.ggo
 	gengetopt --conf-parser < $<
@@ -45,7 +43,7 @@ dss.1: dss dss.1.inc
 	man2html $< > $@
 
 clean:
-	rm -f *.o dss dss.1 dss.1.html Makefile.deps *.ppm *.png *~ cmdline.c cmdline.h index.html
+	rm -f *.o dss dss.1 dss.1.html Makefile.deps *.png *~ cmdline.c cmdline.h index.html
 
 index.html: dss.1.html index.html.in INSTALL README NEWS
 	sed -e '/@README@/,$$d' index.html.in > $@
