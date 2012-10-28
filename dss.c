@@ -932,8 +932,9 @@ static int check_config(void)
 		return -E_INVALID_NUMBER;
 	}
 	DSS_DEBUG_LOG(("unit interval: %i day(s)\n", conf.unit_interval_arg));
-	if (conf.num_intervals_arg <= 0) {
-		DSS_ERROR_LOG(("bad number of intervals  %i\n", conf.num_intervals_arg));
+	if (conf.num_intervals_arg <= 0 || conf.num_intervals_arg > 30) {
+		DSS_ERROR_LOG(("bad number of intervals: %i\n",
+			conf.num_intervals_arg));
 		return -E_INVALID_NUMBER;
 	}
 	DSS_DEBUG_LOG(("number of intervals: %i\n", conf.num_intervals_arg));
