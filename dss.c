@@ -548,10 +548,17 @@ static int rename_incomplete_snapshot(int64_t start)
 {
 	char *old_name;
 	int ret;
+	int64_t now;
 
+	/*
+	 * We don't want the dss_rename() below to fail with EEXIST because the
+	 * last complete snapshot was created (and completed) in the same
+	 * second as this one.
+	 */
+	while ((now = get_current_time()) == start)
+		sleep(1);
 	free(path_to_last_complete_snapshot);
-	ret = complete_name(start, get_current_time(),
-		&path_to_last_complete_snapshot);
+	ret = complete_name(start, now, &path_to_last_complete_snapshot);
 	if (ret < 0)
 		return ret;
 	old_name = incomplete_name(start);
@@ -932,8 +939,9 @@ static int check_config(void)
 		return -E_INVALID_NUMBER;
 	}
 	DSS_DEBUG_LOG(("unit interval: %i day(s)\n", conf.unit_interval_arg));
-	if (conf.num_intervals_arg <= 0) {
-		DSS_ERROR_LOG(("bad number of intervals  %i\n", conf.num_intervals_arg));
+	if (conf.num_intervals_arg <= 0 || conf.num_intervals_arg > 30) {
+		DSS_ERROR_LOG(("bad number of intervals: %i\n",
+			conf.num_intervals_arg));
 		return -E_INVALID_NUMBER;
 	}
 	DSS_DEBUG_LOG(("number of intervals: %i\n", conf.num_intervals_arg));
