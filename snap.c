@@ -195,7 +195,7 @@ static int format_iso8601(char *str, size_t str_size, int64_t t)
 #ifndef DSS_TIMEZONE_FORMAT
 #  define DSS_TIMEZONE_FORMAT "%z"
 #endif
-	if (!strftime(str, str_size, "%Y-%m-%dT%H:%M:%S" DSS_TIMEZONE_FORMAT, &t_tm))
+	if (!strftime(str, str_size, "%Y-%m-%dT%H-%M-%S" DSS_TIMEZONE_FORMAT, &t_tm))
 		return -E_STRFTIME;
 
 	return 0;
